@@ -304,6 +304,10 @@ type nav struct {
 	searchInd       int
 	searchPos       int
 	volatilePreview bool
+	visual          bool
+	visualStart     int
+	visualReverse   bool
+	oldSelections   map[string]int
 }
 
 func (nav *nav) loadDir(path string) *dir {
@@ -409,11 +413,45 @@ func newNav(height int) *nav {
 		selections:      make(map[string]int),
 		selectionInd:    0,
 		height:          height,
+		visual:          false,
+		visualReverse:   false,
+		visualStart:     0,
+		oldSelections:   make(map[string]int),
 	}
 
 	nav.getDirs(wd)
 
 	return nav
+}
+
+func (nav *nav) enterVisual() {
+	dir := nav.currDir()
+	nav.visual = true
+	nav.visualStart = dir.ind
+
+	curr, err := nav.currFile()
+	if err != nil {
+		return
+	}
+
+	// add starting file to the old selection/unselect it
+	if nav.visualReverse {
+		nav.unselectFile(curr.path)
+	} else {
+		nav.selectFile(curr.path)
+	}
+
+	// make a copy of already selected files
+	for key, value := range nav.selections {
+		nav.oldSelections[key] = value
+	}
+}
+
+func (nav *nav) exitVisual() {
+	nav.oldSelections = make(map[string]int)
+	nav.visualStart = 0
+	nav.visual = false
+	nav.visualReverse = false
 }
 
 func (nav *nav) renew() {
@@ -600,6 +638,10 @@ func (nav *nav) up(dist int) {
 		return
 	}
 
+	if nav.visual {
+		nav.visualSelectRange(dir.ind, max(0, dir.ind-dist))
+	}
+
 	dir.ind -= dist
 	dir.ind = max(0, dir.ind)
 
@@ -618,6 +660,10 @@ func (nav *nav) down(dist int) {
 			nav.top()
 		}
 		return
+	}
+
+	if nav.visual {
+		nav.visualSelectRange(dir.ind, min(maxind, dir.ind+dist))
 	}
 
 	dir.ind += dist
@@ -655,6 +701,7 @@ func (nav *nav) open() error {
 	if err != nil {
 		return fmt.Errorf("open: %s", err)
 	}
+	nav.exitVisual()
 
 	path := curr.path
 
@@ -671,6 +718,7 @@ func (nav *nav) open() error {
 
 func (nav *nav) top() {
 	dir := nav.currDir()
+	nav.visualSelectRange(dir.ind, 0)
 
 	dir.ind = 0
 	dir.pos = 0
@@ -678,9 +726,80 @@ func (nav *nav) top() {
 
 func (nav *nav) bottom() {
 	dir := nav.currDir()
+	nav.visualSelectRange(dir.ind, len(dir.files)-1)
 
 	dir.ind = len(dir.files) - 1
 	dir.pos = min(dir.ind, nav.height-1)
+}
+
+func (nav *nav) visualSelectRange(from int, to int) {
+	dir := nav.currDir()
+	hi := nav.visualStart
+	lo := nav.visualStart
+	if from >= nav.visualStart {
+		if to > from {
+			lo = from + 1
+			hi = to
+		} else if to < nav.visualStart {
+			hi = from
+			lo = to
+		} else {
+			hi = from
+			lo = to + 1
+		}
+	}
+	if from < nav.visualStart {
+		if to < from {
+			lo = to
+			hi = from - 1
+		} else if to > nav.visualStart {
+			lo = from
+			hi = to
+		} else {
+			lo = from
+			hi = to - 1
+		}
+	}
+	for i := lo; i <= hi; i++ {
+		path := filepath.Join(dir.path, dir.files[i].Name())
+		if nav.visualReverse {
+			if _, ok := nav.selections[path]; ok {
+				// file is currently selected. unselect it
+				nav.unselectFile(path)
+			} else {
+				// file is not currently selected. if it is form the old selection, select
+				if _, ok := nav.oldSelections[path]; ok {
+					nav.selectFile(path)
+				}
+			}
+		} else {
+			if _, ok := nav.selections[path]; !ok {
+				// file is not currently selected. select it
+				nav.selectFile(path)
+			} else {
+				// file is currently selected. unselect only if it is not in the old selection
+				if _, ok := nav.oldSelections[path]; !ok {
+					nav.unselectFile(path)
+				}
+			}
+		}
+	}
+}
+
+func (nav *nav) selectFile(path string) {
+	if _, ok := nav.selections[path]; !ok {
+		nav.selections[path] = nav.selectionInd
+		nav.selectionInd++
+	}
+}
+
+func (nav *nav) unselectFile(path string) {
+	if _, ok := nav.selections[path]; ok {
+		delete(nav.selections, path)
+		if len(nav.selections) == 0 {
+			nav.selectionInd = 0
+		}
+	}
 }
 
 func (nav *nav) toggleSelection(path string) {
@@ -715,6 +834,7 @@ func (nav *nav) invert() {
 func (nav *nav) unselect() {
 	nav.selections = make(map[string]int)
 	nav.selectionInd = 0
+	nav.exitVisual()
 }
 
 func (nav *nav) save(cp bool) error {
@@ -987,6 +1107,7 @@ func (nav *nav) sync() error {
 }
 
 func (nav *nav) cd(wd string) error {
+	nav.exitVisual()
 	wd = replaceTilde(wd)
 	wd = filepath.Clean(wd)
 

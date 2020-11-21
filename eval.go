@@ -602,6 +602,24 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "visual":
+		if !app.nav.visual {
+			app.nav.visualReverse = false
+			app.nav.enterVisual()
+			app.ui.echo("mode: visual")
+		} else {
+			app.nav.exitVisual()
+			app.ui.echo("mode: normal")
+		}
+	case "visual-reverse":
+		if !app.nav.visual {
+			app.nav.visualReverse = true
+			app.nav.enterVisual()
+			app.ui.echo("mode: visual")
+		} else {
+			app.nav.exitVisual()
+			app.ui.echo("mode: normal")
+		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
