@@ -718,7 +718,9 @@ func (nav *nav) open() error {
 
 func (nav *nav) top() {
 	dir := nav.currDir()
-	nav.visualSelectRange(dir.ind, 0)
+	if nav.visual {
+		nav.visualSelectRange(dir.ind, 0)
+	}
 
 	dir.ind = 0
 	dir.pos = 0
@@ -726,7 +728,9 @@ func (nav *nav) top() {
 
 func (nav *nav) bottom() {
 	dir := nav.currDir()
-	nav.visualSelectRange(dir.ind, len(dir.files)-1)
+	if nav.visual {
+		nav.visualSelectRange(dir.ind, len(dir.files)-1)
+	}
 
 	dir.ind = len(dir.files) - 1
 	dir.pos = min(dir.ind, nav.height-1)
