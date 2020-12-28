@@ -37,7 +37,7 @@ type file struct {
 	ext        string
 	isFlat     bool
 	flatName   string
-	isHidden   bool
+	flatHidden bool
 }
 
 func (f *file) Name() string {
@@ -161,7 +161,7 @@ func normalize(s1, s2 string, ignorecase, ignoredia bool) (string, string) {
 }
 
 func isHidden2(f *file, path string, hiddenfiles []string) bool {
-	return f.isHidden || isHidden(f.FileInfo, path, hiddenfiles)
+	return f.flatHidden || isHidden(f.FileInfo, path, hiddenfiles)
 }
 
 func (dir *dir) sort() {
@@ -326,29 +326,22 @@ type nav struct {
 	volatilePreview bool
 }
 
-/* works only in subroutine because of time.Sleep() */
-func (dir *dir) CollectFlatFiles(nav *nav, prefix string, hidden bool, level int) []*file {
-	d := dir
-	for d.loading {
-		time.Sleep(time.Millisecond)
-		d = nav.loadDir(dir.path)
-	}
-	res := make([]*file, len(d.allFiles))
-	for i, f := range d.allFiles {
+func (dir *dir) collectFlatFiles(nav *nav, prefix string, hidden bool, level int) []*file {
+	res := make([]*file, len(dir.allFiles))
+	for i, f := range dir.allFiles {
+		/* make "flat" copy of the current files */
 		v := *f
 		v.flatName = prefix + f.Name()
 		v.isFlat = true
-		v.isHidden = hidden
+		v.flatHidden = hidden
 		res[i] = &v
-	}
-	if level != 0 {
-		for _, f := range d.allFiles {
-			if f.IsDir() {
-				d := nav.loadDir(f.path)
-				newHidden := hidden || isHidden(f, d.path, d.hiddenfiles)
-				newFlats := d.CollectFlatFiles(nav, prefix+f.Name()+"/", newHidden, level-1)
-				res = append(res, newFlats...)
-			}
+
+		/* get flat files from all subdirectories */
+		if level != 0 && f.IsDir() {
+			d := nav.loadDirBlocking(f.path)
+			newHidden := hidden || isHidden(f, d.path, d.hiddenfiles)
+			newFlats := d.collectFlatFiles(nav, prefix+f.Name()+"/", newHidden, level-1)
+			res = append(res, newFlats...)
 		}
 	}
 	return res
@@ -359,16 +352,36 @@ func (nav *nav) flatten(level int) {
 	dir.isFlat = level != 0
 	if level != 0 {
 		go func() {
-			d := newDir(dir.path)
-			d.isFlat = true
-			d.flatFiles = dir.CollectFlatFiles(nav, "", false, level)
-			d.sort()
-			d.ind, d.pos = 0, 0
-			nav.dirChan <- d
+			flatDir := newDir(dir.path)
+			flatDir.isFlat = true
+			flatDir.flatFiles = dir.collectFlatFiles(nav, "", false, level)
+			flatDir.sort()
+			flatDir.ind, flatDir.pos = 0, 0
+			nav.dirChan <- flatDir
 		}()
 	} else {
 		dir.sort()
 	}
+}
+
+func (nav *nav) loadDirBlocking(path string) *dir {
+	d, ok := nav.dirCache[path]
+	if !ok || d.loading {
+		d := newDir(path)
+		d.sort()
+		d.ind, d.pos = 0, 0
+		go func() {
+			for len(nav.dirChan) == cap(nav.dirChan) {
+				time.Sleep(time.Millisecond * 10)
+			}
+			nav.dirChan <- d
+		}()
+		return d
+	}
+
+	nav.checkDir(d)
+
+	return d
 }
 
 func (nav *nav) loadDir(path string) *dir {
