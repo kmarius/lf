@@ -176,6 +176,24 @@ func (dir *dir) sort() {
 		dir.files = dir.allFiles
 	}
 
+	// when hidden option is disabled, we move hidden files to the
+	// beginning of our file list and then set the beginning of displayed
+	// files to the first non-hidden file in the list
+	if dir.sortType.option&hiddenSort == 0 {
+		sort.SliceStable(dir.files, func(i, j int) bool {
+			if a := isHidden2(dir.files[i], dir.path, dir.hiddenfiles); !a || !isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
+				return a
+			}
+			return i < j
+		})
+		for i := len(dir.files); i > 0; i-- {
+			if isHidden2(dir.files[i-1], dir.path, dir.hiddenfiles) {
+				dir.files = dir.files[i:]
+				break
+			}
+		}
+	}
+
 	switch dir.sortType.method {
 	case naturalSort:
 		sort.SliceStable(dir.files, func(i, j int) bool {
@@ -237,25 +255,6 @@ func (dir *dir) sort() {
 			}
 			return dir.files[i].IsDir()
 		})
-	}
-
-	// when hidden option is disabled, we move hidden files to the
-	// beginning of our file list and then set the beginning of displayed
-	// files to the first non-hidden file in the list
-	if dir.sortType.option&hiddenSort == 0 {
-		sort.SliceStable(dir.files, func(i, j int) bool {
-			if isHidden2(dir.files[i], dir.path, dir.hiddenfiles) && isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
-				return i < j
-			}
-			return isHidden2(dir.files[i], dir.path, dir.hiddenfiles)
-		})
-		for i, f := range dir.files {
-			if !isHidden2(f, dir.path, dir.hiddenfiles) {
-				dir.files = dir.files[i:]
-				return
-			}
-		}
-		dir.files = dir.files[len(dir.files):]
 	}
 }
 
