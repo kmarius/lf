@@ -35,6 +35,16 @@ type file struct {
 	accessTime time.Time
 	changeTime time.Time
 	ext        string
+	isFlat     bool
+	flatName   string
+	isHidden   bool
+}
+
+func (f *file) Name() string {
+	if f.isFlat {
+		return f.flatName
+	}
+	return f.FileInfo.Name()
 }
 
 func readdir(path string) ([]*file, error) {
@@ -117,6 +127,8 @@ type dir struct {
 	ignorecase  bool      // ignorecase value from last sort
 	ignoredia   bool      // ignoredia value from last sort
 	noPerm      bool      // whether lf has no permission to open the directory
+	isFlat      bool
+	flatFiles   []*file
 }
 
 func newDir(path string) *dir {
@@ -148,13 +160,21 @@ func normalize(s1, s2 string, ignorecase, ignoredia bool) (string, string) {
 	return s1, s2
 }
 
+func isHidden2(f *file, path string, hiddenfiles []string) bool {
+	return f.isHidden || isHidden(f.FileInfo, path, hiddenfiles)
+}
+
 func (dir *dir) sort() {
 	dir.sortType = gOpts.sortType
 	dir.hiddenfiles = gOpts.hiddenfiles
 	dir.ignorecase = gOpts.ignorecase
 	dir.ignoredia = gOpts.ignoredia
 
-	dir.files = dir.allFiles
+	if dir.isFlat {
+		dir.files = dir.flatFiles
+	} else {
+		dir.files = dir.allFiles
+	}
 
 	switch dir.sortType.method {
 	case naturalSort:
@@ -224,13 +244,13 @@ func (dir *dir) sort() {
 	// files to the first non-hidden file in the list
 	if dir.sortType.option&hiddenSort == 0 {
 		sort.SliceStable(dir.files, func(i, j int) bool {
-			if isHidden(dir.files[i], dir.path, dir.hiddenfiles) && isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
+			if isHidden2(dir.files[i], dir.path, dir.hiddenfiles) && isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
 				return i < j
 			}
-			return isHidden(dir.files[i], dir.path, dir.hiddenfiles)
+			return isHidden2(dir.files[i], dir.path, dir.hiddenfiles)
 		})
 		for i, f := range dir.files {
-			if !isHidden(f, dir.path, dir.hiddenfiles) {
+			if !isHidden2(f, dir.path, dir.hiddenfiles) {
 				dir.files = dir.files[i:]
 				return
 			}
@@ -304,6 +324,51 @@ type nav struct {
 	searchInd       int
 	searchPos       int
 	volatilePreview bool
+}
+
+/* works only in subroutine because of time.Sleep() */
+func (dir *dir) CollectFlatFiles(nav *nav, prefix string, hidden bool, level int) []*file {
+	d := dir
+	for d.loading {
+		time.Sleep(time.Millisecond)
+		d = nav.loadDir(dir.path)
+	}
+	res := make([]*file, len(d.allFiles))
+	for i, f := range d.allFiles {
+		v := *f
+		v.flatName = prefix + f.Name()
+		v.isFlat = true
+		v.isHidden = hidden
+		res[i] = &v
+	}
+	if level != 0 {
+		for _, f := range d.allFiles {
+			if f.IsDir() {
+				d := nav.loadDir(f.path)
+				newHidden := hidden || isHidden(f, d.path, d.hiddenfiles)
+				newFlats := d.CollectFlatFiles(nav, prefix+f.Name()+"/", newHidden, level-1)
+				res = append(res, newFlats...)
+			}
+		}
+	}
+	return res
+}
+
+func (nav *nav) flatten(level int) {
+	dir := nav.currDir()
+	dir.isFlat = level != 0
+	if level != 0 {
+		go func() {
+			d := newDir(dir.path)
+			d.isFlat = true
+			d.flatFiles = dir.CollectFlatFiles(nav, "", false, level)
+			d.sort()
+			d.ind, d.pos = 0, 0
+			nav.dirChan <- d
+		}()
+	} else {
+		dir.sort()
+	}
 }
 
 func (nav *nav) loadDir(path string) *dir {
