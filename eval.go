@@ -389,6 +389,9 @@ func update(app *app) {
 	app.ui.menuSelected = -2
 
 	switch {
+	case app.ui.cmdPrefix == "filter: ":
+		s := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
+		app.nav.filterCurrDir(s)
 	case gOpts.incsearch && app.ui.cmdPrefix == "/":
 		app.nav.search = string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
 
@@ -433,6 +436,9 @@ func normal(app *app) {
 func insert(app *app, arg string) {
 	switch {
 	case gOpts.incsearch && (app.ui.cmdPrefix == "/" || app.ui.cmdPrefix == "?"):
+		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
+		update(app)
+	case app.ui.cmdPrefix == "filter: ":
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 		update(app)
 	case app.ui.cmdPrefix == "find: ":
@@ -602,6 +608,15 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "filter":
+		app.ui.cmdPrefix = "filter: "
+		if len(e.args) > 0 {
+			app.ui.cmdAccLeft = []rune(e.args[0])
+			app.nav.filterCurrDir(e.args[0])
+		} else {
+			app.ui.cmdAccLeft = []rune(app.nav.currDir().filterString)
+		}
+		//app.ui.loadFileInfo(app.nav)
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
@@ -1051,6 +1066,9 @@ func (e *callExpr) eval(app *app, args []string) {
 		if app.ui.cmdPrefix == ">" {
 			return
 		}
+		if app.ui.cmdPrefix == "filter: " {
+			app.nav.filterCurrDir("")
+		}
 		if gOpts.incsearch && (app.ui.cmdPrefix == "/" || app.ui.cmdPrefix == "?") {
 			dir := app.nav.currDir()
 			dir.ind = app.nav.searchInd
@@ -1175,6 +1193,10 @@ func (e *callExpr) eval(app *app, args []string) {
 		}
 	case "cmd-enter":
 		s := string(append(app.ui.cmdAccLeft, app.ui.cmdAccRight...))
+		if app.ui.cmdPrefix == "filter: " {
+			normal(app)
+			app.nav.filterCurrDir(s)
+		}
 		if len(s) == 0 {
 			return
 		}

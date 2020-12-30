@@ -105,18 +105,19 @@ func readdir(path string) ([]*file, error) {
 }
 
 type dir struct {
-	loading     bool      // directory is loading from disk
-	loadTime    time.Time // current loading or last load time
-	ind         int       // index of current entry in files
-	pos         int       // position of current entry in ui
-	path        string    // full path of directory
-	files       []*file   // displayed files in directory including or excluding hidden ones
-	allFiles    []*file   // all files in directory including hidden ones (same array as files)
-	sortType    sortType  // sort method and options from last sort
-	hiddenfiles []string  // hiddenfiles value from last sort
-	ignorecase  bool      // ignorecase value from last sort
-	ignoredia   bool      // ignoredia value from last sort
-	noPerm      bool      // whether lf has no permission to open the directory
+	loading      bool      // directory is loading from disk
+	loadTime     time.Time // current loading or last load time
+	ind          int       // index of current entry in files
+	pos          int       // position of current entry in ui
+	path         string    // full path of directory
+	files        []*file   // displayed files in directory including or excluding hidden ones
+	allFiles     []*file   // all files in directory including hidden ones (same array as files)
+	sortType     sortType  // sort method and options from last sort
+	hiddenfiles  []string  // hiddenfiles value from last sort
+	ignorecase   bool      // ignorecase value from last sort
+	ignoredia    bool      // ignoredia value from last sort
+	noPerm       bool      // whether lf has no permission to open the directory
+	filterString string
 }
 
 func newDir(path string) *dir {
@@ -219,6 +220,21 @@ func (dir *dir) sort() {
 		})
 	}
 
+	if dir.filterString != "" {
+		sort.SliceStable(dir.files, func(i, j int) bool {
+			if a := !matchesFilter(dir.files[i].Name(), dir.filterString); !a || matchesFilter(dir.files[j].Name(), dir.filterString) {
+				return a
+			}
+			return i < j
+		})
+		for i := len(dir.files); i > 0; i-- {
+			if !matchesFilter(dir.files[i-1].Name(), dir.filterString) {
+				dir.files = dir.files[i:]
+				break
+			}
+		}
+	}
+
 	// when hidden option is disabled, we move hidden files to the
 	// beginning of our file list and then set the beginning of displayed
 	// files to the first non-hidden file in the list
@@ -236,6 +252,36 @@ func (dir *dir) sort() {
 			}
 		}
 		dir.files = dir.files[len(dir.files):]
+	}
+}
+
+func matchesFilter(s string, t string) bool {
+	u, v := normalize(s, t, gOpts.ignorecase, gOpts.ignoredia)
+	return strings.Contains(u, v)
+}
+
+func (nav *nav) filterCurrDir(filterString string) {
+	d := nav.currDir()
+	name := d.name()
+	d.filter(filterString)
+	d.sel(name, nav.height)
+}
+
+func (dir *dir) filter(filterString string) {
+	if strings.HasPrefix(filterString, dir.filterString) && filterString != "" {
+		matchingFiles := make([]*file, len(dir.files))
+		j := 0
+		for _, f := range dir.files {
+			if matchesFilter(f.Name(), filterString) {
+				matchingFiles[j] = f
+				j++
+			}
+		}
+		dir.files = matchingFiles[:j]
+		dir.filterString = filterString
+	} else {
+		dir.filterString = filterString
+		dir.sort()
 	}
 }
 
@@ -354,6 +400,7 @@ func (nav *nav) checkDir(dir *dir) {
 		dir.loadTime = now
 		go func() {
 			nd := newDir(dir.path)
+			nd.filterString = dir.filterString
 			nd.sort()
 			nav.dirChan <- nd
 		}()
