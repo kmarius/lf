@@ -127,8 +127,12 @@ type dir struct {
 	ignorecase  bool      // ignorecase value from last sort
 	ignoredia   bool      // ignoredia value from last sort
 	noPerm      bool      // whether lf has no permission to open the directory
-	isFlat      bool
+	flatLevel   int
 	flatFiles   []*file
+}
+
+func (dir *dir) IsFlat() bool {
+	return dir.flatLevel != 0
 }
 
 func newDir(path string) *dir {
@@ -170,11 +174,9 @@ func (dir *dir) sort() {
 	dir.ignorecase = gOpts.ignorecase
 	dir.ignoredia = gOpts.ignoredia
 
-	if dir.isFlat {
-		dir.files = dir.flatFiles
-	} else {
-		dir.files = dir.allFiles
-	}
+	dir.files = dir.allFiles
+	n := len(dir.files)
+	t0 := time.Now()
 
 	// when hidden option is disabled, we move hidden files to the
 	// beginning of our file list and then set the beginning of displayed
@@ -255,6 +257,10 @@ func (dir *dir) sort() {
 			}
 			return dir.files[i].IsDir()
 		})
+
+	}
+	if n > 1000 {
+		log.Printf("sorted %d files in %dms\n", n, time.Since(t0).Milliseconds())
 	}
 }
 
@@ -325,62 +331,61 @@ type nav struct {
 	volatilePreview bool
 }
 
-func (dir *dir) collectFlatFiles(nav *nav, prefix string, hidden bool, level int) []*file {
-	res := make([]*file, len(dir.allFiles))
-	for i, f := range dir.allFiles {
-		/* make "flat" copy of the current files */
+// with nodirfirst these actually turn out to be sorted
+func (dir *dir) collectFlatFiles(prefix string, hidden bool, level int) []*file {
+	var res []*file
+	for _, f := range dir.allFiles {
+		/* make "flat" copy of the file (not making a fresh copy makes sorting 30 times slower) */
 		v := *f
 		v.flatName = prefix + f.Name()
 		v.isFlat = true
 		v.flatHidden = hidden
-		res[i] = &v
+
+		if dir.sortType.option&reverseSort == 0 {
+			res = append(res, &v)
+		}
 
 		/* get flat files from all subdirectories */
 		if level != 0 && f.IsDir() {
-			d := nav.loadDirBlocking(f.path)
-			newHidden := hidden || isHidden(f, d.path, d.hiddenfiles)
-			newFlats := d.collectFlatFiles(nav, prefix+f.Name()+"/", newHidden, level-1)
+			d := newDir(f.path)
+			d.sort()
+			newHidden := hidden || isHidden(f, dir.path, dir.hiddenfiles)
+			newFlats := d.collectFlatFiles(prefix+f.Name()+"/", newHidden, level-1)
 			res = append(res, newFlats...)
+		}
+		if dir.sortType.option&reverseSort != 0 {
+			res = append(res, &v)
 		}
 	}
 	return res
 }
 
-func (nav *nav) flatten(level int) {
-	dir := nav.currDir()
-	dir.isFlat = level != 0
+func (nav *nav) flattenCurr(level int) {
+	nav.flatten(nav.currDir().path, level)
+}
+
+func (nav *nav) flatten(path string, level int) {
 	if level != 0 {
 		go func() {
-			flatDir := newDir(dir.path)
-			flatDir.isFlat = true
-			flatDir.flatFiles = dir.collectFlatFiles(nav, "", false, level)
+			flatDir := newDir(path)
+			flatDir.sort()
+			flatDir.flatLevel = level
+			flatDir.hiddenfiles = gOpts.hiddenfiles
+			t0 := time.Now()
+			flatDir.allFiles = flatDir.collectFlatFiles("", false, level)
+			n := len(flatDir.flatFiles)
+			log.Printf("collected %d files in %dms\n", n, time.Since(t0).Milliseconds())
 			flatDir.sort()
 			flatDir.ind, flatDir.pos = 0, 0
 			nav.dirChan <- flatDir
 		}()
 	} else {
-		dir.sort()
-	}
-}
-
-func (nav *nav) loadDirBlocking(path string) *dir {
-	d, ok := nav.dirCache[path]
-	if !ok || d.loading {
-		d := newDir(path)
-		d.sort()
-		d.ind, d.pos = 0, 0
 		go func() {
-			for len(nav.dirChan) == cap(nav.dirChan) {
-				time.Sleep(time.Millisecond * 10)
-			}
-			nav.dirChan <- d
+			nd := newDir(path)
+			nd.sort()
+			nav.dirChan <- nd
 		}()
-		return d
 	}
-
-	nav.checkDir(d)
-
-	return d
 }
 
 func (nav *nav) loadDir(path string) *dir {
@@ -410,10 +415,42 @@ func (nav *nav) loadDir(path string) *dir {
 	return d
 }
 
+func (nav *nav) checkFlatDir(flatDir *dir) {
+	dirQ := []*dir{newDir(flatDir.path)}
+	for len(dirQ) > 0 {
+		now := time.Now()
+		d := dirQ[0]
+		dirQ = dirQ[1:]
+
+		s, err := os.Stat(d.path)
+		if err == nil {
+			if s.ModTime().After(flatDir.loadTime) && !s.ModTime().After(now) {
+				flatDir.loading = true
+				flatDir.loadTime = now
+				go func() {
+					nav.flatten(flatDir.path, flatDir.flatLevel)
+				}()
+				return
+			}
+		}
+
+		for _, f := range d.allFiles {
+			if f.IsDir() {
+				dirQ = append(dirQ, newDir(f.path))
+			}
+		}
+	}
+}
+
 func (nav *nav) checkDir(dir *dir) {
 	s, err := os.Stat(dir.path)
 	if err != nil {
 		log.Printf("getting directory info: %s", err)
+		return
+	}
+
+	if dir.IsFlat() {
+		nav.checkFlatDir(dir)
 		return
 	}
 

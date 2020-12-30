@@ -609,7 +609,7 @@ func (e *callExpr) eval(app *app, args []string) {
 				level = l
 			}
 		}
-		app.nav.flatten(level)
+		app.nav.flattenCurr(level)
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
