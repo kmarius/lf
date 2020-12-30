@@ -44,6 +44,7 @@ var gOpts struct {
 	wrapscan       bool
 	wrapscroll     bool
 	findlen        int
+	findtimeout    int
 	period         int
 	scrolloff      int
 	tabstop        int
@@ -83,6 +84,7 @@ func init() {
 	gOpts.wrapscan = true
 	gOpts.wrapscroll = false
 	gOpts.findlen = 1
+	gOpts.findtimeout = 500
 	gOpts.period = 0
 	gOpts.scrolloff = 0
 	gOpts.tabstop = 8

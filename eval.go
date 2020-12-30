@@ -183,6 +183,17 @@ func (e *setExpr) eval(app *app, args []string) {
 			return
 		}
 		gOpts.findlen = n
+	case "findtimeout":
+		n, err := strconv.Atoi(e.val)
+		if err != nil {
+			app.ui.echoerrf("findtimeout: %s", err)
+			return
+		}
+		if n < 0 {
+			app.ui.echoerr("findtimeout: value should be a non-negative number")
+			return
+		}
+		gOpts.findtimeout = n
 	case "period":
 		n, err := strconv.Atoi(e.val)
 		if err != nil {
@@ -442,9 +453,11 @@ func insert(app *app, arg string) {
 			switch app.nav.findSingle() {
 			case 0:
 				app.ui.echoerrf("find: pattern not found: %s", app.nav.find)
+				app.timeout = time.Now().Add(time.Millisecond * time.Duration(gOpts.findtimeout))
 			case 1:
 				app.ui.loadFile(app.nav)
 				app.ui.loadFileInfo(app.nav)
+				app.timeout = time.Now().Add(time.Millisecond * time.Duration(gOpts.findtimeout))
 			default:
 				app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 				return

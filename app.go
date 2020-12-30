@@ -32,6 +32,7 @@ type app struct {
 	cmdHistory    []cmdItem
 	cmdHistoryBeg int
 	cmdHistoryInd int
+	timeout       time.Time
 }
 
 func newApp(screen tcell.Screen) *app {
@@ -325,6 +326,9 @@ func (app *app) loop() {
 
 			app.ui.draw(app.nav)
 		case ev := <-app.ui.evChan:
+			if app.timeout.After(time.Now()) {
+				continue
+			}
 			e := app.ui.readEvent(ev)
 			if e == nil {
 				continue
