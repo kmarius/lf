@@ -602,6 +602,12 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "menu":
+		{
+			if len(e.args) > 0 {
+				app.ui.menuBuf = customMenu(e.args)
+			}
+		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
