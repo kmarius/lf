@@ -443,10 +443,13 @@ func insert(app *app, arg string) {
 			case 0:
 				app.ui.echoerrf("find: pattern not found: %s", app.nav.find)
 			case 1:
+				(&callExpr{"open", nil, 1}).eval(app, nil)
 				app.ui.loadFile(app.nav)
 				app.ui.loadFileInfo(app.nav)
 			default:
 				app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
+				app.ui.loadFile(app.nav)
+				app.ui.loadFileInfo(app.nav)
 				return
 			}
 		} else {

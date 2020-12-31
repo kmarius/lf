@@ -1081,16 +1081,23 @@ func (nav *nav) findSingle() int {
 	count := 0
 	index := 0
 	dir := nav.currDir()
-	for i := 0; i < len(dir.files); i++ {
+	for i := dir.ind; i < len(dir.files); i++ {
 		if findMatch(dir.files[i].Name(), nav.find) {
 			count++
-			if count > 1 {
-				return count
+			if count == 1 {
+				index = i
 			}
-			index = i
 		}
 	}
-	if count == 1 {
+	for i := 0; i < dir.ind; i++ {
+		if findMatch(dir.files[i].Name(), nav.find) {
+			count++
+			if count == 1 {
+				index = i
+			}
+		}
+	}
+	if count > 0 {
 		if index > dir.ind {
 			nav.down(index - dir.ind)
 		} else {
