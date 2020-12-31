@@ -617,6 +617,14 @@ func (e *callExpr) eval(app *app, args []string) {
 			app.ui.cmdAccLeft = []rune(app.nav.currDir().filterString)
 		}
 		//app.ui.loadFileInfo(app.nav)
+	case "flatten":
+		level := 0
+		if len(e.args) > 0 {
+			if l, err := strconv.Atoi(e.args[0]); err == nil {
+				level = l
+			}
+		}
+		app.nav.flattenCurr(level)
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
