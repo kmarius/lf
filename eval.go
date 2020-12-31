@@ -602,6 +602,25 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "open":
+		e.evalBuiltin(app, args)
+		return
+	case "builtin":
+		if len(e.args) == 0 {
+			app.ui.echoerrf("no argument for: builtin")
+			return
+		}
+		(&callExpr{e.args[0], e.args[1:], e.count}).evalBuiltin(app, args)
+	}
+	if cmd, ok := gOpts.cmds[e.name]; ok {
+		cmd.eval(app, e.args)
+	} else {
+		e.evalBuiltin(app, args)
+	}
+}
+
+func (e *callExpr) evalBuiltin(app *app, args []string) {
+	switch e.name {
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
