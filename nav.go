@@ -184,7 +184,7 @@ func (dir *dir) sort() {
 	// files to the first non-hidden file in the list
 	if dir.sortType.option&hiddenSort == 0 {
 		sort.SliceStable(dir.files, func(i, j int) bool {
-			if a := isHidden2(dir.files[i], dir.path, dir.hiddenfiles); !a || !isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
+			if a := isHidden2(dir.files[i], dir.path, dir.hiddenfiles); !a || !isHidden2(dir.files[j], dir.path, dir.hiddenfiles) {
 				return a
 			}
 			return i < j
@@ -274,6 +274,7 @@ func (dir *dir) sort() {
 			}
 		}
 	}
+
 	if n > 1000 {
 		log.Printf("sorted %d files in %dms\n", n, time.Since(t0).Milliseconds())
 	}
@@ -380,11 +381,73 @@ type nav struct {
 	oldSelections   map[string]int
 }
 
+func newFlatDir(path string, level int) *dir {
+	t0 := time.Now()
+
+	files := collectFlatFiles(path, level)
+
+	n := len(files)
+	log.Printf("collected %d files in %dms\n", n, time.Since(t0).Milliseconds())
+
+	return &dir{
+		loadTime:  t0,
+		path:      path,
+		files:     files,
+		allFiles:  files,
+		noPerm:    false,
+		flatLevel: level,
+	}
+}
+
 // with nodirfirst these actually turn out to be sorted
-func (dir *dir) collectFlatFiles(prefix string, hidden bool, level int) []*file {
+func collectFlatFiles(path string, level int) []*file {
+	var res []*file
+	dir := newDir(path)
+	dir.sort()
+	fStack := make([]*file, len(dir.allFiles))
+	lStack := make([]int, len(dir.allFiles))
+	top := len(dir.allFiles) - 1
+	for i := 0; i <= top; i++ {
+		fStack[top-i] = dir.allFiles[i]
+		fStack[top-i].flatHidden = isHidden(fStack[top-i], dir.path, dir.hiddenfiles)
+		lStack[top-i] = level
+	}
+	for top >= 0 {
+		v := *fStack[top]
+		l := lStack[top]
+		fStack = fStack[:top]
+		lStack = lStack[:top]
+		top--
+
+		v.flatName = v.flatName + v.Name()
+		v.isFlat = true
+		res = append(res, &v)
+
+		if l != 0 && v.IsDir() {
+			sd := newDir(v.path)
+			sd.sort()
+			for i := len(sd.allFiles) - 1; i >= 0; i-- {
+				sd.allFiles[i].flatName = v.flatName + "/"
+				sd.allFiles[i].flatHidden = v.flatHidden || isHidden(sd.allFiles[i], sd.path, sd.hiddenfiles)
+				fStack = append(fStack, sd.allFiles[i])
+				lStack = append(lStack, l-1)
+				top++
+			}
+		}
+	}
+	return res
+}
+
+func collectFlatFiles2(path string, level int) []*file {
+	dir := newDir(path)
+	dir.sort()
+	return dir.collectFlatFilesRec("", false, level)
+}
+
+func (dir *dir) collectFlatFilesRec(prefix string, hidden bool, level int) []*file {
 	var res []*file
 	for _, f := range dir.allFiles {
-		/* make "flat" copy of the file (not making a fresh copy makes sorting 30 times slower) */
+		/* make "flat" copy of the file (not taking a fresh copy makes sorting 30 times slower) */
 		v := *f
 		v.flatName = prefix + f.Name()
 		v.isFlat = true
@@ -399,7 +462,7 @@ func (dir *dir) collectFlatFiles(prefix string, hidden bool, level int) []*file 
 			d := newDir(f.path)
 			d.sort()
 			newHidden := hidden || isHidden(f, dir.path, dir.hiddenfiles)
-			newFlats := d.collectFlatFiles(prefix+f.Name()+"/", newHidden, level-1)
+			newFlats := d.collectFlatFilesRec(prefix+f.Name()+"/", newHidden, level-1)
 			res = append(res, newFlats...)
 		}
 		if dir.sortType.option&reverseSort != 0 {
@@ -416,16 +479,8 @@ func (nav *nav) flattenCurr(level int) {
 func (nav *nav) flatten(path string, level int) {
 	if level != 0 {
 		go func() {
-			flatDir := newDir(path)
+			flatDir := newFlatDir(path, level)
 			flatDir.sort()
-			flatDir.flatLevel = level
-			flatDir.hiddenfiles = gOpts.hiddenfiles
-			t0 := time.Now()
-			flatDir.allFiles = flatDir.collectFlatFiles("", false, level)
-			n := len(flatDir.flatFiles)
-			log.Printf("collected %d files in %dms\n", n, time.Since(t0).Milliseconds())
-			flatDir.sort()
-			flatDir.ind, flatDir.pos = 0, 0
 			nav.dirChan <- flatDir
 		}()
 	} else {
