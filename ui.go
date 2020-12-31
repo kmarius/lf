@@ -1166,3 +1166,17 @@ func listMatchesMenu(ui *ui, matches []string) error {
 	ui.menuBuf = b
 	return nil
 }
+
+func customMenu(lines []string) *bytes.Buffer {
+	t := new(tabwriter.Writer)
+	b := new(bytes.Buffer)
+
+	t.Init(b, 0, gOpts.tabstop, 2, '\t', 0)
+	for _, l := range lines {
+		log.Println(l)
+		fmt.Fprintln(t, l)
+	}
+	t.Flush()
+
+	return b
+}
