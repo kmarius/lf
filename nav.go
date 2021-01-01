@@ -157,6 +157,21 @@ func (dir *dir) sort() {
 
 	dir.files = dir.allFiles
 
+	if dir.filterString != "" {
+		sort.SliceStable(dir.files, func(i, j int) bool {
+			if a := !matchesFilter(dir.files[i].Name(), dir.filterString); !a || matchesFilter(dir.files[j].Name(), dir.filterString) {
+				return a
+			}
+			return i < j
+		})
+		for i := len(dir.files); i > 0; i-- {
+			if !matchesFilter(dir.files[i-1].Name(), dir.filterString) {
+				dir.files = dir.files[i:]
+				break
+			}
+		}
+	}
+
 	switch dir.sortType.method {
 	case naturalSort:
 		sort.SliceStable(dir.files, func(i, j int) bool {
@@ -218,21 +233,6 @@ func (dir *dir) sort() {
 			}
 			return dir.files[i].IsDir()
 		})
-	}
-
-	if dir.filterString != "" {
-		sort.SliceStable(dir.files, func(i, j int) bool {
-			if a := !matchesFilter(dir.files[i].Name(), dir.filterString); !a || matchesFilter(dir.files[j].Name(), dir.filterString) {
-				return a
-			}
-			return i < j
-		})
-		for i := len(dir.files); i > 0; i-- {
-			if !matchesFilter(dir.files[i-1].Name(), dir.filterString) {
-				dir.files = dir.files[i:]
-				break
-			}
-		}
 	}
 
 	// when hidden option is disabled, we move hidden files to the
