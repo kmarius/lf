@@ -732,6 +732,13 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			}
 		}
 		app.nav.flattenCurr(level)
+	case "timeout":
+		if len(e.args) > 0 {
+			if d, err := strconv.Atoi(e.args[0]); err == nil {
+				log.Println(string(d))
+				app.timeout = time.Now().Add(time.Millisecond * time.Duration(d))
+			}
+		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
