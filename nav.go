@@ -115,20 +115,20 @@ func readdir(path string) ([]*file, error) {
 }
 
 type dir struct {
-	loading     bool      // directory is loading from disk
-	loadTime    time.Time // current loading or last load time
-	ind         int       // index of current entry in files
-	pos         int       // position of current entry in ui
-	path        string    // full path of directory
-	files       []*file   // displayed files in directory including or excluding hidden ones
-	allFiles    []*file   // all files in directory including hidden ones (same array as files)
-	sortType    sortType  // sort method and options from last sort
-	hiddenfiles []string  // hiddenfiles value from last sort
-	ignorecase  bool      // ignorecase value from last sort
-	ignoredia   bool      // ignoredia value from last sort
-	noPerm      bool      // whether lf has no permission to open the directory
-	flatLevel   int
-	flatFiles   []*file
+	loading      bool      // directory is loading from disk
+	loadTime     time.Time // current loading or last load time
+	ind          int       // index of current entry in files
+	pos          int       // position of current entry in ui
+	path         string    // full path of directory
+	files        []*file   // displayed files in directory including or excluding hidden ones
+	allFiles     []*file   // all files in directory including hidden ones (same array as files)
+	sortType     sortType  // sort method and options from last sort
+	hiddenfiles  []string  // hiddenfiles value from last sort
+	ignorecase   bool      // ignorecase value from last sort
+	ignoredia    bool      // ignoredia value from last sort
+	noPerm       bool      // whether lf has no permission to open the directory
+	flatLevel    int
+	flatFiles    []*file
 	filterString string
 }
 
@@ -480,8 +480,10 @@ func (nav *nav) flattenCurr(level int) {
 
 func (nav *nav) flatten(path string, level int) {
 	if level != 0 {
+		d := nav.loadDir(path)
 		go func() {
 			flatDir := newFlatDir(path, level)
+			flatDir.filterString = d.filterString
 			flatDir.sort()
 			nav.dirChan <- flatDir
 		}()
