@@ -402,6 +402,7 @@ func newFlatDir(path string, level int) *dir {
 // with nodirfirst these actually turn out to be sorted
 func collectFlatFiles(path string, level int) []*file {
 	var res []*file
+
 	dir := newDir(path)
 	dir.sort()
 	fStack := make([]*file, len(dir.allFiles))
@@ -412,25 +413,26 @@ func collectFlatFiles(path string, level int) []*file {
 		fStack[top-i].flatHidden = isHidden(fStack[top-i], dir.path, dir.hiddenfiles)
 		lStack[top-i] = level
 	}
+
 	for top >= 0 {
-		v := *fStack[top]
-		l := lStack[top]
+		f := *fStack[top]
+		lvl := lStack[top]
 		fStack = fStack[:top]
 		lStack = lStack[:top]
 		top--
 
-		v.flatName = v.flatName + v.Name()
-		v.isFlat = true
-		res = append(res, &v)
+		f.flatName += f.Name()
+		f.isFlat = true
+		res = append(res, &f)
 
-		if l != 0 && v.IsDir() {
-			sd := newDir(v.path)
+		if lvl != 0 && f.IsDir() {
+			sd := newDir(f.path)
 			sd.sort()
 			for i := len(sd.allFiles) - 1; i >= 0; i-- {
-				sd.allFiles[i].flatName = v.flatName + "/"
-				sd.allFiles[i].flatHidden = v.flatHidden || isHidden(sd.allFiles[i], sd.path, sd.hiddenfiles)
+				sd.allFiles[i].flatName = f.flatName + "/"
+				sd.allFiles[i].flatHidden = f.flatHidden || isHidden(sd.allFiles[i], sd.path, sd.hiddenfiles)
 				fStack = append(fStack, sd.allFiles[i])
-				lStack = append(lStack, l-1)
+				lStack = append(lStack, lvl-1)
 				top++
 			}
 		}
@@ -520,11 +522,23 @@ func (nav *nav) loadDir(path string) *dir {
 }
 
 func (nav *nav) checkFlatDir(flatDir *dir) {
-	dirQ := []*dir{newDir(flatDir.path)}
-	for len(dirQ) > 0 {
+	if flatDir.sortType != gOpts.sortType ||
+		!reflect.DeepEqual(flatDir.hiddenfiles, gOpts.hiddenfiles) ||
+		flatDir.ignorecase != gOpts.ignorecase ||
+		flatDir.ignoredia != gOpts.ignoredia {
+		flatDir.loading = true
+		go func() {
+			flatDir.sort()
+			flatDir.loading = false
+			nav.dirChan <- flatDir
+		}()
+		return
+	}
+	dirQueue := []*dir{newDir(flatDir.path)}
+	for len(dirQueue) > 0 {
 		now := time.Now()
-		d := dirQ[0]
-		dirQ = dirQ[1:]
+		d := dirQueue[0]
+		dirQueue = dirQueue[1:]
 
 		s, err := os.Stat(d.path)
 		if err == nil {
@@ -540,7 +554,7 @@ func (nav *nav) checkFlatDir(flatDir *dir) {
 
 		for _, f := range d.allFiles {
 			if f.IsDir() {
-				dirQ = append(dirQ, newDir(f.path))
+				dirQueue = append(dirQueue, newDir(f.path))
 			}
 		}
 	}

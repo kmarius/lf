@@ -679,8 +679,16 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 	case "flatten":
 		level := 0
 		if len(e.args) > 0 {
-			if l, err := strconv.Atoi(e.args[0]); err == nil {
-				level = l
+			level = app.nav.currDir().flatLevel
+			arg0 := e.args[0]
+			if l, err := strconv.Atoi(arg0); err == nil {
+				if arg0[0] == '+' || arg0[0] == '-' {
+					level += l
+				} else {
+					level = l
+				}
+			} else if arg0 == "*" {
+				level = -1
 			}
 		}
 		app.nav.flattenCurr(level)
