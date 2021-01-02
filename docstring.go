@@ -627,7 +627,7 @@ binary files and displayed as 'binary'.
 Set the path of a previewer file to filter the content of regular files for
 previewing. The file should be executable. Five arguments are passed to the
 file, first is the current file name; the second, third, fourth, and fifth
-are height, width, horizontal position, and vertical position of preview
+are width, height, horizontal position, and vertical position of preview
 pane respectively. SIGPIPE signal is sent when enough lines are read. If the
 previewer returns a non-zero exit code, then the preview cache for the given
 file is disabled. This means that if the file is selected in the future, the
@@ -1400,20 +1400,33 @@ follows:
 
     1. Full Path (e.g. '~/.config/lf/lfrc')
     2. Dir Name  (e.g. '.git/') (only matches dirs with a trailing slash at the end)
-    3. File Name (e.g. '.git')
-    4. Base Name (e.g. 'README.*')
-    5. Extension (e.g. '*.txt')
-    6. File Type (e.g. 'ln')
+    3. File Type (e.g. 'ln') (except 'fi')
+    4. File Name (e.g. '.git')
+    5. Base Name (e.g. 'README.*')
+    6. Extension (e.g. '*.txt')
+    7. Default   (i.e. 'fi')
 
 For example, given a regular text file '/path/to/README.txt', the following
 entries are checked in the configuration and the first one to match is used:
 
     1. '/path/to/README.txt'
-    2. 'README.txt/' (skipped since the file is not a directory)
-    3. 'README.txt'
-    4. 'README.*'
-    5. '*.txt'
-    6. 'fi'
+    2. (skipped since the file is not a directory)
+    3. (skipped since the file is of type 'fi')
+    4. 'README.txt'
+    5. 'README.*'
+    6. '*.txt'
+    7. 'fi'
+
+Given a regular directory '/path/to/example.d', the following entries are
+checked in the configuration and the first one to match is used:
+
+    1. '/path/to/example.d'
+    2. 'example.d/'
+    3. 'di'
+    4. 'example.d'
+    5. 'example.*'
+    6. '*.d'
+    7. 'fi'
 
 Note that glob-like patterns do not actually perform glob matching due to
 performance reasons.
