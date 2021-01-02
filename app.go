@@ -33,6 +33,7 @@ type app struct {
 	cmdHistoryBeg int
 	cmdHistoryInd int
 	timeout       time.Time
+	uberExpr      expr
 }
 
 func newApp(screen tcell.Screen) *app {
