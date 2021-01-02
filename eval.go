@@ -400,7 +400,6 @@ func update(app *app) {
 		} else if e, ok := app.uberExpr.(*execExpr); ok {
 			a := *e
 			e = &a
-			log.Printf("executing exec expr %s", e)
 			e.eval(app, []string{argument})
 		} else {
 			app.ui.echoerrf("don't know what to do with %s", app.uberExpr)
