@@ -389,8 +389,8 @@ func update(app *app) {
 	app.ui.menuSelected = -2
 
 	switch {
-	case app.ui.cmdPrefix == "uber: ":
-		if cmd, ok := gOpts.cmds["uber-cmd"]; ok {
+	case app.ui.cmdPrefix == "prompt: ":
+		if cmd, ok := gOpts.cmds["prompt-cmd"]; ok {
 			s := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
 			cmd.eval(app, []string{s})
 		}
@@ -440,7 +440,7 @@ func insert(app *app, arg string) {
 	case gOpts.incsearch && (app.ui.cmdPrefix == "/" || app.ui.cmdPrefix == "?"):
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 		update(app)
-	case app.ui.cmdPrefix == "uber: ":
+	case app.ui.cmdPrefix == "prompt: ":
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 		update(app)
 	case app.ui.cmdPrefix == "find: ":
@@ -610,8 +610,8 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
-	case "uber":
-		app.ui.cmdPrefix = "uber: "
+	case "prompt":
+		app.ui.cmdPrefix = "prompt: "
 		update(app)
 	case "menu":
 		{
@@ -1193,8 +1193,8 @@ func (e *callExpr) eval(app *app, args []string) {
 	case "cmd-enter":
 		s := string(append(app.ui.cmdAccLeft, app.ui.cmdAccRight...))
 
-		if app.ui.cmdPrefix == "uber: " {
-			if cmd, ok := gOpts.cmds["uber-enter"]; ok {
+		if app.ui.cmdPrefix == "prompt: " {
+			if cmd, ok := gOpts.cmds["prompt-enter"]; ok {
 				cmd.eval(app, []string{s})
 			}
 		}
