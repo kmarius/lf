@@ -390,19 +390,9 @@ func update(app *app) {
 
 	switch {
 	case app.ui.cmdPrefix == "uber: ":
-		argument := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
-		if e, ok := app.uberExpr.(*callExpr); ok {
-			log.Printf("executing call expr %s", e)
-			a := *e
-			e = &a
-			e.args = append(e.args, argument)
-			e.eval(app, nil)
-		} else if e, ok := app.uberExpr.(*execExpr); ok {
-			a := *e
-			e = &a
-			e.eval(app, []string{argument})
-		} else {
-			app.ui.echoerrf("don't know what to do with %s", app.uberExpr)
+		if cmd, ok := gOpts.cmds["uber-cmd"]; ok {
+			s := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
+			cmd.eval(app, []string{s})
 		}
 	case gOpts.incsearch && app.ui.cmdPrefix == "/":
 		app.nav.search = string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
@@ -621,27 +611,8 @@ func insert(app *app, arg string) {
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
 	case "uber":
-		if len(e.args) > 0 {
-			p := newParser(strings.NewReader(strings.Join(e.args, " ")))
-			if p.parse() {
-				if ex, ok := p.expr.(*callExpr); ok {
-					app.ui.cmdPrefix = "uber: "
-					app.uberExpr = ex
-				} else if ex, ok := p.expr.(*execExpr); ok {
-					app.ui.cmdPrefix = "uber: "
-					app.uberExpr = ex
-				} else {
-					app.ui.echoerrf("not a call expression\n")
-				}
-			} else {
-				if p.err != nil {
-					app.ui.echoerrf("%s", p.err)
-				} else {
-					app.ui.echoerrf("parsing error\n")
-				}
-			}
-			update(app)
-		}
+		app.ui.cmdPrefix = "uber: "
+		update(app)
 	case "menu":
 		{
 			if len(e.args) > 0 {
@@ -1221,6 +1192,13 @@ func (e *callExpr) eval(app *app, args []string) {
 		}
 	case "cmd-enter":
 		s := string(append(app.ui.cmdAccLeft, app.ui.cmdAccRight...))
+
+		if app.ui.cmdPrefix == "uber: " {
+			if cmd, ok := gOpts.cmds["uber-enter"]; ok {
+				cmd.eval(app, []string{s})
+			}
+		}
+
 		if len(s) == 0 {
 			return
 		}

@@ -32,7 +32,6 @@ type app struct {
 	cmdHistory    []cmdItem
 	cmdHistoryBeg int
 	cmdHistoryInd int
-	uberExpr      expr
 }
 
 func newApp(screen tcell.Screen) *app {
