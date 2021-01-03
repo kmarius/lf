@@ -666,6 +666,11 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 				app.ui.menuBuf = customMenu(e.args)
 			}
 		}
+	case "normal":
+		if app.nav.visual {
+			app.nav.exitVisual()
+			app.ui.echo("mode: normal")
+		}
 	case "visual":
 		if !app.nav.visual {
 			app.nav.visualReverse = false
