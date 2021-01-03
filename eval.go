@@ -403,8 +403,8 @@ func update(app *app) {
 	case app.ui.cmdPrefix == "filter: ":
 		s := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
 		app.nav.filterCurrDir(s)
-	case app.ui.cmdPrefix == "uber: ":
-		if cmd, ok := gOpts.cmds["uber-cmd"]; ok {
+	case app.ui.cmdPrefix == "prompt: ":
+		if cmd, ok := gOpts.cmds["prompt-cmd"]; ok {
 			s := string(app.ui.cmdAccLeft) + string(app.ui.cmdAccRight)
 			cmd.eval(app, []string{s})
 		}
@@ -457,7 +457,7 @@ func insert(app *app, arg string) {
 	case app.ui.cmdPrefix == "filter: ":
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 		update(app)
-	case app.ui.cmdPrefix == "uber: ":
+	case app.ui.cmdPrefix == "prompt: ":
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
 		update(app)
 	case app.ui.cmdPrefix == "find: ":
@@ -651,8 +651,8 @@ func (e *callExpr) eval(app *app, args []string) {
 
 func (e *callExpr) evalBuiltin(app *app, args []string) {
 	switch e.name {
-	case "uber":
-		app.ui.cmdPrefix = "uber: "
+	case "prompt":
+		app.ui.cmdPrefix = "prompt: "
 		update(app)
 	case "menu":
 		{
@@ -1290,8 +1290,8 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			normal(app)
 			app.nav.filterCurrDir(s)
 		}
-		if app.ui.cmdPrefix == "uber: " {
-			if cmd, ok := gOpts.cmds["uber-enter"]; ok {
+		if app.ui.cmdPrefix == "prompt: " {
+			if cmd, ok := gOpts.cmds["prompt-enter"]; ok {
 				cmd.eval(app, []string{s})
 			}
 		}
