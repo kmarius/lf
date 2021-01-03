@@ -632,6 +632,12 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "uncmd":
+		for _, cmd := range e.args {
+			if _, ok := gOpts.cmds[cmd]; ok {
+				delete(gOpts.cmds, cmd)
+			}
+		}
 	case "open", "rename", "delete", "paste":
 		e.evalBuiltin(app, args)
 	case "builtin":
