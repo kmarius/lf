@@ -475,7 +475,7 @@ func insert(app *app, arg string) {
 				app.timeout = time.Now().Add(time.Millisecond * time.Duration(gOpts.findtimeout))
 			default:
 				app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
-				app.ui.loadFile(app.nav)
+				app.ui.loadFile(app.nav, true)
 				app.ui.loadFileInfo(app.nav)
 				return
 			}
