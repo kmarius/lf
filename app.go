@@ -184,8 +184,8 @@ func (app *app) loop() {
 		}
 	}
 
-	if gCommand != "" {
-		p := newParser(strings.NewReader(gCommand))
+	for _, cmd := range gCommands {
+		p := newParser(strings.NewReader(cmd))
 
 		for p.parse() {
 			p.expr.eval(app, nil)
@@ -304,7 +304,7 @@ func (app *app) loop() {
 			curr, err := app.nav.currFile()
 			if err == nil {
 				if d.path == app.nav.currDir().path {
-					app.ui.loadFile(app.nav)
+					app.ui.loadFile(app.nav, true)
 				}
 				if d.path == curr.path {
 					app.ui.dirPrev = d
@@ -356,7 +356,7 @@ func (app *app) loop() {
 			app.ui.draw(app.nav)
 		case <-app.ticker.C:
 			app.nav.renew()
-			app.ui.loadFile(app.nav)
+			app.ui.loadFile(app.nav, false)
 			app.ui.draw(app.nav)
 		}
 	}
@@ -442,7 +442,7 @@ func (app *app) runShell(s string, args []string, prefix string) {
 		}
 	}
 
-	app.ui.loadFile(app.nav)
+	app.ui.loadFile(app.nav, true)
 
 	switch prefix {
 	case "%":
