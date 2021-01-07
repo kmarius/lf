@@ -721,6 +721,8 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 				app.timeout = time.Now().Add(time.Millisecond * time.Duration(d))
 			}
 		}
+	case "check":
+		app.nav.loadDir(app.nav.currDir().path)
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
