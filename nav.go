@@ -1332,13 +1332,20 @@ func (nav *nav) sync() error {
 	if err != nil {
 		return err
 	}
+	path, ok := nav.marks["'"]
 
 	nav.saves = make(map[string]bool)
 	for _, f := range list {
 		nav.saves[f] = cp
 	}
 
-	return nav.readMarks()
+	err = nav.readMarks()
+
+	if ok {
+		nav.marks["'"] = path
+	}
+
+	return err
 }
 
 func (nav *nav) cd(wd string) error {
