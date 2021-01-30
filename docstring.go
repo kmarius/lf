@@ -117,12 +117,13 @@ The following options can be used to customize the behavior of lf:
     ignoredia      bool      (default on)
     incsearch      bool      (default off)
     info           []string  (default '')
+    mouse          bool      (default off)
     number         bool      (default off)
     period         int       (default 0)
     preview        bool      (default on)
     previewer      string    (default '')
     cleaner        string    (default '')
-    promptfmt      string    (default "\033[32;1m%u@%h\033[0m:\033[34;1m%w\033[0m\033[1m%f\033[0m")
+    promptfmt      string    (default "\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m\033[1m%f\033[0m")
     ratios         []int     (default '1:2:3')
     relativenumber bool      (default off)
     reverse        bool      (default off)
@@ -600,6 +601,10 @@ Currently supported information types are 'size', 'time', 'atime', and
 'ctime'. Information is only shown when the pane width is more than twice
 the width of information.
 
+    mouse          bool      (default off)
+
+Send mouse events as input.
+
     number         bool      (default off)
 
 Show the position number for directory items at the left side of pane. When
@@ -642,14 +647,15 @@ preview cache disabled. The file should be executable. One argument is
 passed to the file; the path to the file whose preview should be cleaned.
 Preview clearing is disabled when the value of this option is left empty.
 
-    promptfmt      string    (default "\033[32;1m%u@%h\033[0m:\033[34;1m%w/\033[0m\033[1m%f\033[0m")
+    promptfmt      string    (default "\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m\033[1m%f\033[0m")
 
 Format string of the prompt shown in the top line. Special expansions are
 provided, '%u' as the user name, '%h' as the host name, '%w' as the working
-directory, and '%f' as the file name. Home folder is shown as '~' in the
-working directory expansion. Directory names are automatically shortened to
-a single character starting from the left most parent when the prompt does
-not fit to the screen.
+directory, '%d' as the working directory with a trailing path separator, and
+'%f' as the file name. Home folder is shown as '~' in the working directory
+expansion. Directory names are automatically shortened to a single character
+starting from the left most parent when the prompt does not fit to the
+screen.
 
     ratios         []int     (default '1:2:3')
 
@@ -907,6 +913,24 @@ terminals work (e.g. control and h combination sends a backspace key
 instead). The easiest way to find the name of a key combination is to press
 the key while lf is running and read the name of the key from the unknown
 mapping error.
+
+Mouse buttons are prefixed with 'm' character:
+
+    map <m-1> down  # primary
+    map <m-2> down  # secondary
+    map <m-3> down  # middle
+    map <m-4> down
+    map <m-5> down
+    map <m-6> down
+    map <m-7> down
+    map <m-8> down
+
+Mouse wheel events are also prefixed with 'm' character:
+
+    map <m-up>    down
+    map <m-down>  down
+    map <m-left>  down
+    map <m-right> down
 
 
 Push Mappings
@@ -1175,12 +1199,12 @@ while typing. In this mode, you can either use 'cmd-enter' to accept the
 search or use 'cmd-escape' to cancel the search. Alternatively, you can also
 map some other commands with 'cmap' to accept the search and execute the
 command immediately afterwards. Possible candidates are 'up', 'down' and
-their variants, 'updir', and 'open' commands. For example, you can use arrow
-keys to finish the search with the following mappings:
+their variants, 'top', 'bottom', 'updir', and 'open' commands. For example,
+you can use arrow keys to finish the search with the following mappings:
 
-    cmap <up> up
-    cmap <down> down
-    cmap <left> updir
+    cmap <up>    up
+    cmap <down>  down
+    cmap <left>  updir
     cmap <right> open
 
 Finding mechanism is implemented with commands 'find' (default 'f'),
@@ -1285,7 +1309,16 @@ reading it to the memory and then do the processing afterwards. This is
 especially relevant for big files. lf automatically closes the previewer
 script output pipe with a SIGPIPE when enough lines are read. When
 everything else fails, you can make use of the height argument to only feed
-the first portion of the file to a program for preview.
+the first portion of the file to a program for preview. Note that some
+programs may not respond well to SIGPIPE to exit with a non-zero return code
+and avoid caching. You may trap SIGPIPE in your preview script to avoid
+error propogation:
+
+    #!/bin/sh
+
+    trap "" PIPE
+
+    ...
 
 You may also use an existing preview filter as you like. Your system may
 already come with a preview filter named 'lesspipe'. These filters may have
@@ -1314,8 +1347,16 @@ define any other command:
         GIT_PS1_SHOWUNTRACKEDFILES=auto
         GIT_PS1_SHOWUPSTREAM=auto
         git=$(__git_ps1 " (%s)") || true
-        fmt="\033[32;1m%u@%h\033[0m:\033[34;1m%w\033[0m\033[1m%f$git\033[0m"
+        fmt="\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m\033[1m%f$git\033[0m"
         lf -remote "send $id set promptfmt \"$fmt\""
+    }}
+
+If you want to print escape sequences, you may redirect 'printf' output to
+'/dev/tty'. The following xterm specific escape sequence sets the terminal
+title to the working directory:
+
+    cmd on-cd &{{
+        printf "\033]0; $PWD\007" > /dev/tty
     }}
 
 This command runs whenever you change directory but not on startup. You can

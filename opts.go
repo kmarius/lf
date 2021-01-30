@@ -36,6 +36,7 @@ var gOpts struct {
 	ignorecase     bool
 	ignoredia      bool
 	incsearch      bool
+	mouse          bool
 	number         bool
 	preview        bool
 	relativenumber bool
@@ -76,6 +77,7 @@ func init() {
 	gOpts.ignorecase = true
 	gOpts.ignoredia = true
 	gOpts.incsearch = false
+	gOpts.mouse = false
 	gOpts.number = false
 	gOpts.preview = true
 	gOpts.relativenumber = false
@@ -93,7 +95,7 @@ func init() {
 	gOpts.ifs = ""
 	gOpts.previewer = ""
 	gOpts.cleaner = ""
-	gOpts.promptfmt = "\033[32;1m%u@%h\033[0m:\033[34;1m%w\033[0m\033[1m%f\033[0m"
+	gOpts.promptfmt = "\033[32;1m%u@%h\033[0m:\033[34;1m%d\033[0m\033[1m%f\033[0m"
 	gOpts.shell = gDefaultShell
 	gOpts.timefmt = time.ANSIC
 	gOpts.truncatechar = "~"

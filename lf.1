@@ -128,12 +128,13 @@ The following options can be used to customize the behavior of lf:
     ignoredia      bool      (default on)
     incsearch      bool      (default off)
     info           []string  (default '')
+    mouse          bool      (default off)
     number         bool      (default off)
     period         int       (default 0)
     preview        bool      (default on)
     previewer      string    (default '')
     cleaner        string    (default '')
-    promptfmt      string    (default "\e033[32;1m%u@%h\e033[0m:\e033[34;1m%w\e033[0m\e033[1m%f\e033[0m")
+    promptfmt      string    (default "\e033[32;1m%u@%h\e033[0m:\e033[34;1m%d\e033[0m\e033[1m%f\e033[0m")
     ratios         []int     (default '1:2:3')
     relativenumber bool      (default off)
     reverse        bool      (default off)
@@ -692,6 +693,12 @@ Jump to the first match after each keystroke during searching.
 List of information shown for directory items at the right side of pane. Currently supported information types are 'size', 'time', 'atime', and 'ctime'. Information is only shown when the pane width is more than twice the width of information.
 .PP
 .EX
+    mouse          bool      (default off)
+.EE
+.PP
+Send mouse events as input.
+.PP
+.EX
     number         bool      (default off)
 .EE
 .PP
@@ -722,10 +729,10 @@ Set the path of a previewer file to filter the content of regular files for prev
 Set the path of a cleaner file. This file will be called if previewing is enabled, the previewer is set, and the previously selected file had its preview cache disabled. The file should be executable. One argument is passed to the file; the path to the file whose preview should be cleaned. Preview clearing is disabled when the value of this option is left empty.
 .PP
 .EX
-    promptfmt      string    (default "\e033[32;1m%u@%h\e033[0m:\e033[34;1m%w/\e033[0m\e033[1m%f\e033[0m")
+    promptfmt      string    (default "\e033[32;1m%u@%h\e033[0m:\e033[34;1m%d\e033[0m\e033[1m%f\e033[0m")
 .EE
 .PP
-Format string of the prompt shown in the top line. Special expansions are provided, '%u' as the user name, '%h' as the host name, '%w' as the working directory, and '%f' as the file name. Home folder is shown as '~' in the working directory expansion. Directory names are automatically shortened to a single character starting from the left most parent when the prompt does not fit to the screen.
+Format string of the prompt shown in the top line. Special expansions are provided, '%u' as the user name, '%h' as the host name, '%w' as the working directory, '%d' as the working directory with a trailing path separator, and '%f' as the file name. Home folder is shown as '~' in the working directory expansion. Directory names are automatically shortened to a single character starting from the left most parent when the prompt does not fit to the screen.
 .PP
 .EX
     ratios         []int     (default '1:2:3')
@@ -1004,6 +1011,28 @@ Newer terminals (e.g. gnome-terminal) may prefix the key with an escape key when
 .EE
 .PP
 Please note that, some key combinations are not possible due to the way terminals work (e.g. control and h combination sends a backspace key instead). The easiest way to find the name of a key combination is to press the key while lf is running and read the name of the key from the unknown mapping error.
+.PP
+Mouse buttons are prefixed with 'm' character:
+.PP
+.EX
+    map <m-1> down  # primary
+    map <m-2> down  # secondary
+    map <m-3> down  # middle
+    map <m-4> down
+    map <m-5> down
+    map <m-6> down
+    map <m-7> down
+    map <m-8> down
+.EE
+.PP
+Mouse wheel events are also prefixed with 'm' character:
+.PP
+.EX
+    map <m-up>    down
+    map <m-down>  down
+    map <m-left>  down
+    map <m-right> down
+.EE
 .SH PUSH MAPPINGS
 The usual way to map a key sequence is to assign it to a named or unnamed command. While this provides a clean way to remap builtin keys as well as other commands, it can be limiting at times. For this reason 'push' command is provided by lf. This command is used to simulate key pushes given as its arguments. You can 'map' a key to a 'push' command with an argument to create various keybindings.
 .PP
@@ -1188,12 +1217,12 @@ By default, lf does not assign 'delete' command to a key to protect new users. Y
 .SH SEARCHING FILES
 There are two mechanisms implemented in lf to search a file in the current directory. Searching is the traditional method to move the selection to a file matching a given pattern. Finding is an alternative way to search for a pattern possibly using fewer keystrokes.
 .PP
-Searching mechanism is implemented with commands 'search' (default '/'), 'search-back' (default '?'), 'search-next' (default 'n'), and 'search-prev' (default 'N'). You can enable 'globsearch' option to match with a glob pattern. Globbing supports '*' to match any sequence, '?' to match any character, and '[...]' or '[^...] to match character sets or ranges. You can enable 'incsearch' option to jump to the current match at each keystroke while typing. In this mode, you can either use 'cmd-enter' to accept the search or use 'cmd-escape' to cancel the search. Alternatively, you can also map some other commands with 'cmap' to accept the search and execute the command immediately afterwards. Possible candidates are 'up', 'down' and their variants, 'updir', and 'open' commands. For example, you can use arrow keys to finish the search with the following mappings:
+Searching mechanism is implemented with commands 'search' (default '/'), 'search-back' (default '?'), 'search-next' (default 'n'), and 'search-prev' (default 'N'). You can enable 'globsearch' option to match with a glob pattern. Globbing supports '*' to match any sequence, '?' to match any character, and '[...]' or '[^...] to match character sets or ranges. You can enable 'incsearch' option to jump to the current match at each keystroke while typing. In this mode, you can either use 'cmd-enter' to accept the search or use 'cmd-escape' to cancel the search. Alternatively, you can also map some other commands with 'cmap' to accept the search and execute the command immediately afterwards. Possible candidates are 'up', 'down' and their variants, 'top', 'bottom', 'updir', and 'open' commands. For example, you can use arrow keys to finish the search with the following mappings:
 .PP
 .EX
-    cmap <up> up
-    cmap <down> down
-    cmap <left> updir
+    cmap <up>    up
+    cmap <down>  down
+    cmap <left>  updir
     cmap <right> open
 .EE
 .PP
@@ -1267,7 +1296,19 @@ Since this script is called for each file selection change it needs to be as eff
     esac
 .EE
 .PP
-Another important consideration for efficiency is the use of programs with short startup times for preview. For this reason, 'highlight' is recommended over 'pygmentize' for syntax highlighting. Besides, it is also important that the application is processing the file on the fly rather than first reading it to the memory and then do the processing afterwards. This is especially relevant for big files. lf automatically closes the previewer script output pipe with a SIGPIPE when enough lines are read. When everything else fails, you can make use of the height argument to only feed the first portion of the file to a program for preview.
+Another important consideration for efficiency is the use of programs with short startup times for preview. For this reason, 'highlight' is recommended over 'pygmentize' for syntax highlighting. Besides, it is also important that the application is processing the file on the fly rather than first reading it to the memory and then do the processing afterwards. This is especially relevant for big files. lf automatically closes the previewer script output pipe with a SIGPIPE when enough lines are read. When everything else fails, you can make use of the height argument to only feed the first portion of the file to a program for preview. Note that some programs may not respond well to SIGPIPE to exit with a non-zero return code and avoid caching. You may trap SIGPIPE in your preview script to avoid error propogation:
+.PP
+.EX
+    #!/bin/sh
+.EE
+.PP
+.EX
+    trap "" PIPE
+.EE
+.PP
+.EX
+    ...
+.EE
 .PP
 You may also use an existing preview filter as you like. Your system may already come with a preview filter named 'lesspipe'. These filters may have a mechanism to add user customizations as well. See the related documentations for more information.
 .SH CHANGING DIRECTORY
@@ -1284,8 +1325,16 @@ There is a special command 'on-cd' that runs a shell command when it is defined 
         GIT_PS1_SHOWUNTRACKEDFILES=auto
         GIT_PS1_SHOWUPSTREAM=auto
         git=$(__git_ps1 " (%s)") || true
-        fmt="\e033[32;1m%u@%h\e033[0m:\e033[34;1m%w\e033[0m\e033[1m%f$git\e033[0m"
+        fmt="\e033[32;1m%u@%h\e033[0m:\e033[34;1m%d\e033[0m\e033[1m%f$git\e033[0m"
         lf -remote "send $id set promptfmt \e"$fmt\e""
+    }}
+.EE
+.PP
+If you want to print escape sequences, you may redirect 'printf' output to '/dev/tty'. The following xterm specific escape sequence sets the terminal title to the working directory:
+.PP
+.EX
+    cmd on-cd &{{
+        printf "\e033]0; $PWD\e007" > /dev/tty
     }}
 .EE
 .PP

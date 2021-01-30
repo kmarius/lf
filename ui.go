@@ -193,6 +193,7 @@ func printLength(s string) int {
 
 func (win *win) print(screen tcell.Screen, x, y int, st tcell.Style, s string) tcell.Style {
 	off := x
+	var comb []rune
 	for i := 0; i < len(s); i++ {
 		r, w := utf8.DecodeRuneInString(s[i:])
 
@@ -208,8 +209,18 @@ func (win *win) print(screen tcell.Screen, x, y int, st tcell.Style, s string) t
 			continue
 		}
 
+		for {
+			rc, wc := utf8.DecodeRuneInString(s[i+w:])
+			if !unicode.Is(unicode.Mn, rc) {
+				break
+			}
+			comb = append(comb, rc)
+			i += wc
+		}
+
 		if x < win.w {
-			screen.SetContent(win.x+x, win.y+y, r, nil, st)
+			screen.SetContent(win.x+x, win.y+y, r, comb, st)
+			comb = nil
 		}
 
 		i += w - 1
@@ -663,10 +674,6 @@ func (ui *ui) drawPromptLine(nav *nav) {
 
 	sep := string(filepath.Separator)
 
-	if !strings.HasSuffix(pwd, sep) {
-		pwd += sep
-	}
-
 	var fname string
 	curr, err := nav.currFile()
 	if err == nil {
@@ -679,7 +686,7 @@ func (ui *ui) drawPromptLine(nav *nav) {
 	prompt = strings.Replace(prompt, "%h", gHostname, -1)
 	prompt = strings.Replace(prompt, "%f", fname, -1)
 
-	if printLength(strings.Replace(prompt, "%w", pwd, -1)) > ui.promptWin.w {
+	if printLength(strings.Replace(strings.Replace(prompt, "%w", pwd, -1), "%d", pwd, -1)) > ui.promptWin.w {
 		names := strings.Split(pwd, sep)
 		for i := range names {
 			if names[i] == "" {
@@ -687,7 +694,7 @@ func (ui *ui) drawPromptLine(nav *nav) {
 			}
 			r, _ := utf8.DecodeRuneInString(names[i])
 			names[i] = string(r)
-			if printLength(strings.Replace(prompt, "%w", strings.Join(names, sep), -1)) <= ui.promptWin.w {
+			if printLength(strings.Replace(strings.Replace(prompt, "%w", strings.Join(names, sep), -1), "%d", strings.Join(names, sep), -1)) <= ui.promptWin.w {
 				break
 			}
 		}
@@ -695,6 +702,10 @@ func (ui *ui) drawPromptLine(nav *nav) {
 	}
 
 	prompt = strings.Replace(prompt, "%w", pwd, -1)
+	if !strings.HasSuffix(pwd, sep) {
+		pwd += sep
+	}
+	prompt = strings.Replace(prompt, "%d", pwd, -1)
 
 	ui.promptWin.print(ui.screen, 0, 0, st, prompt)
 }
@@ -1007,6 +1018,45 @@ func (ui *ui) readNormalEvent(ev tcell.Event) expr {
 			ui.menuBuf = listBinds(binds)
 			return draw
 		}
+	case *tcell.EventMouse:
+		var button string
+
+		switch tev.Buttons() {
+		case tcell.Button1:
+			button = "<m-1>"
+		case tcell.Button2:
+			button = "<m-2>"
+		case tcell.Button3:
+			button = "<m-3>"
+		case tcell.Button4:
+			button = "<m-4>"
+		case tcell.Button5:
+			button = "<m-5>"
+		case tcell.Button6:
+			button = "<m-6>"
+		case tcell.Button7:
+			button = "<m-7>"
+		case tcell.Button8:
+			button = "<m-8>"
+		case tcell.WheelUp:
+			button = "<m-up>"
+		case tcell.WheelDown:
+			button = "<m-down>"
+		case tcell.WheelLeft:
+			button = "<m-left>"
+		case tcell.WheelRight:
+			button = "<m-right>"
+		case tcell.ButtonNone:
+			return nil
+		}
+
+		expr, ok := gOpts.keys[button]
+		if !ok {
+			ui.echoerrf("unknown mapping: %s", button)
+			return draw
+		}
+
+		return expr
 	case *tcell.EventResize:
 		return &callExpr{"redraw", nil, 1}
 	case *tcell.EventError:
@@ -1072,6 +1122,9 @@ func (ui *ui) resume() {
 		log.Fatalf("creating screen: %s", err)
 	} else if err = screen.Init(); err != nil {
 		log.Fatalf("initializing screen: %s", err)
+	}
+	if gOpts.mouse {
+		screen.EnableMouse()
 	}
 
 	ui.screen = screen

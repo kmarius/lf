@@ -729,22 +729,29 @@ func (nav *nav) position() {
 }
 
 func (nav *nav) previewLoop(ui *ui) {
-	var path string
-	for {
-		p, ok := <-nav.previewChan
-		if !ok {
-			return
+	var prev string
+	for path := range nav.previewChan {
+		clear := len(path) == 0
+	loop:
+		for {
+			select {
+			case path = <-nav.previewChan:
+				clear = clear || len(path) == 0
+			default:
+				break loop
+			}
 		}
-		if len(p) != 0 {
-			win := ui.wins[len(ui.wins)-1]
-			nav.preview(p, win)
-			path = p
-		} else if len(gOpts.previewer) != 0 && len(gOpts.cleaner) != 0 && nav.volatilePreview {
-			cmd := exec.Command(gOpts.cleaner, path)
+		if clear && len(gOpts.previewer) != 0 && len(gOpts.cleaner) != 0 && nav.volatilePreview {
+			cmd := exec.Command(gOpts.cleaner, prev)
 			if err := cmd.Run(); err != nil {
 				log.Printf("cleaning preview: %s", err)
 			}
 			nav.volatilePreview = false
+		}
+		if len(path) != 0 {
+			win := ui.wins[len(ui.wins)-1]
+			nav.preview(path, win)
+			prev = path
 		}
 	}
 }
@@ -859,14 +866,16 @@ func (nav *nav) sort() {
 	}
 }
 
-func (nav *nav) up(dist int) {
+func (nav *nav) up(dist int) bool {
 	dir := nav.currDir()
+
+	old := dir.ind
 
 	if dir.ind == 0 {
 		if gOpts.wrapscroll {
 			nav.bottom()
 		}
-		return
+		return old != dir.ind
 	}
 
 	if nav.visual {
@@ -879,10 +888,14 @@ func (nav *nav) up(dist int) {
 	dir.pos -= dist
 	edge := min(min(nav.height/2, gOpts.scrolloff), dir.ind)
 	dir.pos = max(dir.pos, edge)
+
+	return old != dir.ind
 }
 
-func (nav *nav) down(dist int) {
+func (nav *nav) down(dist int) bool {
 	dir := nav.currDir()
+
+	old := dir.ind
 
 	maxind := len(dir.files) - 1
 
@@ -890,7 +903,7 @@ func (nav *nav) down(dist int) {
 		if gOpts.wrapscroll {
 			nav.top()
 		}
-		return
+		return old != dir.ind
 	}
 
 	if nav.visual {
@@ -909,6 +922,8 @@ func (nav *nav) down(dist int) {
 
 	dir.pos = min(dir.pos, nav.height-edge-1)
 	dir.pos = min(dir.pos, maxind)
+
+	return old != dir.ind
 }
 
 func (nav *nav) updir() error {
@@ -947,24 +962,32 @@ func (nav *nav) open() error {
 	return nil
 }
 
-func (nav *nav) top() {
+func (nav *nav) top() bool {
 	dir := nav.currDir()
 	if nav.visual {
 		nav.visualSelectRange(dir.ind, 0)
 	}
 
+	old := dir.ind
+
 	dir.ind = 0
 	dir.pos = 0
+
+	return old != dir.ind
 }
 
-func (nav *nav) bottom() {
+func (nav *nav) bottom() bool {
 	dir := nav.currDir()
 	if nav.visual {
 		nav.visualSelectRange(dir.ind, len(dir.files)-1)
 	}
 
+	old := dir.ind
+
 	dir.ind = len(dir.files) - 1
 	dir.pos = min(dir.ind, nav.height-1)
+
+	return old != dir.ind
 }
 
 func (nav *nav) visualSelectRange(from int, to int) {
@@ -1470,42 +1493,38 @@ func (nav *nav) findSingle() int {
 	return count
 }
 
-func (nav *nav) findNext() bool {
+func (nav *nav) findNext() (bool, bool) {
 	dir := nav.currDir()
 	for i := dir.ind + 1; i < len(dir.files); i++ {
 		if findMatch(dir.files[i].Name(), nav.find) {
-			nav.down(i - dir.ind)
-			return true
+			return nav.down(i - dir.ind), true
 		}
 	}
 	if gOpts.wrapscan {
 		for i := 0; i < dir.ind; i++ {
 			if findMatch(dir.files[i].Name(), nav.find) {
-				nav.up(dir.ind - i)
-				return true
+				return nav.up(dir.ind - i), true
 			}
 		}
 	}
-	return false
+	return false, false
 }
 
-func (nav *nav) findPrev() bool {
+func (nav *nav) findPrev() (bool, bool) {
 	dir := nav.currDir()
 	for i := dir.ind - 1; i >= 0; i-- {
 		if findMatch(dir.files[i].Name(), nav.find) {
-			nav.up(dir.ind - i)
-			return true
+			return nav.up(dir.ind - i), true
 		}
 	}
 	if gOpts.wrapscan {
 		for i := len(dir.files) - 1; i > dir.ind; i-- {
 			if findMatch(dir.files[i].Name(), nav.find) {
-				nav.down(i - dir.ind)
-				return true
+				return nav.down(i - dir.ind), true
 			}
 		}
 	}
-	return false
+	return false, false
 }
 
 func searchMatch(name, pattern string) (matched bool, err error) {
@@ -1529,58 +1548,46 @@ func searchMatch(name, pattern string) (matched bool, err error) {
 	return strings.Contains(name, pattern), nil
 }
 
-func (nav *nav) searchNext() error {
+func (nav *nav) searchNext() (bool, error) {
 	dir := nav.currDir()
 	for i := dir.ind + 1; i < len(dir.files); i++ {
-		matched, err := searchMatch(dir.files[i].Name(), nav.search)
-		if err != nil {
-			return err
-		}
-		if matched {
-			nav.down(i - dir.ind)
-			return nil
+		if matched, err := searchMatch(dir.files[i].Name(), nav.search); err != nil {
+			return false, err
+		} else if matched {
+			return nav.down(i - dir.ind), nil
 		}
 	}
 	if gOpts.wrapscan {
 		for i := 0; i < dir.ind; i++ {
-			matched, err := searchMatch(dir.files[i].Name(), nav.search)
-			if err != nil {
-				return err
-			}
-			if matched {
-				nav.up(dir.ind - i)
-				return nil
+			if matched, err := searchMatch(dir.files[i].Name(), nav.search); err != nil {
+				return false, err
+			} else if matched {
+				return nav.up(dir.ind - i), nil
 			}
 		}
 	}
-	return nil
+	return false, nil
 }
 
-func (nav *nav) searchPrev() error {
+func (nav *nav) searchPrev() (bool, error) {
 	dir := nav.currDir()
 	for i := dir.ind - 1; i >= 0; i-- {
-		matched, err := searchMatch(dir.files[i].Name(), nav.search)
-		if err != nil {
-			return err
-		}
-		if matched {
-			nav.up(dir.ind - i)
-			return nil
+		if matched, err := searchMatch(dir.files[i].Name(), nav.search); err != nil {
+			return false, err
+		} else if matched {
+			return nav.up(dir.ind - i), nil
 		}
 	}
 	if gOpts.wrapscan {
 		for i := len(dir.files) - 1; i > dir.ind; i-- {
-			matched, err := searchMatch(dir.files[i].Name(), nav.search)
-			if err != nil {
-				return err
-			}
-			if matched {
-				nav.down(i - dir.ind)
-				return nil
+			if matched, err := searchMatch(dir.files[i].Name(), nav.search); err != nil {
+				return false, err
+			} else if matched {
+				return nav.down(i - dir.ind), nil
 			}
 		}
 	}
-	return nil
+	return false, nil
 }
 
 func (nav *nav) removeMark(mark string) error {
