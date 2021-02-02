@@ -287,6 +287,10 @@ func fileInfo(f *file, d *dir) string {
 
 	path := filepath.Join(d.path, f.Name())
 
+	if f.linkTarget != "" {
+		info = "->"
+	}
+
 	for _, s := range gOpts.info {
 		switch s {
 		case "size":
@@ -313,9 +317,9 @@ func fileInfo(f *file, d *dir) string {
 
 			switch {
 			case f.dirCount < 0:
-				info = fmt.Sprintf("%s    ?", info)
+				info = fmt.Sprintf("%s ?", info)
 			case f.dirCount < 1000:
-				info = fmt.Sprintf("%s %4d", info, f.dirCount)
+				info = fmt.Sprintf("%s %d", info, f.dirCount)
 			default:
 				info = fmt.Sprintf("%s 999+", info)
 			}
