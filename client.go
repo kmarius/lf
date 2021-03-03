@@ -49,6 +49,8 @@ func run() {
 
 	app.loop()
 
+	nav.Stop()
+
 	app.ui.screen.Fini()
 }
 
