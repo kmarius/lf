@@ -65,6 +65,8 @@ var gOpts struct {
 	cmdkeys        map[string]expr
 	cmds           map[string]expr
 	sortType       sortType
+	watchinterval  int
+	watchdelay     int
 }
 
 func init() {
@@ -102,6 +104,8 @@ func init() {
 	gOpts.info = nil
 	gOpts.shellopts = nil
 	gOpts.sortType = sortType{naturalSort, dirfirstSort}
+	gOpts.watchinterval = 250
+	gOpts.watchdelay = 50
 
 	gOpts.keys = make(map[string]expr)
 
