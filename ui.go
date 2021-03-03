@@ -17,6 +17,7 @@ import (
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/mattn/go-runewidth"
+	"golang.org/x/term"
 )
 
 const gEscapeCode = 27
@@ -244,11 +245,11 @@ func (win *win) printf(screen tcell.Screen, x, y int, st tcell.Style, format str
 }
 
 func (win *win) printLine(screen tcell.Screen, x, y int, st tcell.Style, s string) {
-	win.printf(screen, x, y, st, "%s%*s", s, win.w-len(s), "")
+	win.printf(screen, x, y, st, "%s%*s", s, win.w-printLength(s), "")
 }
 
 func (win *win) printRight(screen tcell.Screen, y int, st tcell.Style, s string) {
-	win.print(screen, win.w-len(s), y, st, s)
+	win.print(screen, win.w-printLength(s), y, st, s)
 }
 
 func (win *win) printReg(screen tcell.Screen, reg *reg) {
@@ -733,6 +734,30 @@ func (ui *ui) drawStatLine(nav *nav) {
 	ind := min(dir.ind+1, tot)
 	acc := string(ui.keyCount) + string(ui.keyAcc)
 
+	var selection string
+
+	if len(nav.saves) > 0 {
+		copy := 0
+		move := 0
+		for _, cp := range nav.saves {
+			if cp {
+				copy++
+			} else {
+				move++
+			}
+		}
+		if copy > 0 {
+			selection += fmt.Sprintf("  \033[33;7m %d \033[0m", copy)
+		}
+		if move > 0 {
+			selection += fmt.Sprintf("  \033[31;7m %d \033[0m", move)
+		}
+	}
+
+	if len(nav.selections) > 0 {
+		selection += fmt.Sprintf("  \033[35;7m %d \033[0m", len(nav.selections))
+	}
+
 	var progress string
 
 	if nav.copyTotal > 0 {
@@ -748,7 +773,7 @@ func (ui *ui) drawStatLine(nav *nav) {
 		progress += fmt.Sprintf("  [%d/%d]", nav.deleteCount, nav.deleteTotal)
 	}
 
-	ruler := fmt.Sprintf("%s%s  %d/%d", acc, progress, ind, tot)
+	ruler := fmt.Sprintf("%s%s%s  %d/%d", acc, progress, selection, ind, tot)
 
 	ui.msgWin.printRight(ui.screen, 0, st, ruler)
 }
@@ -1123,27 +1148,24 @@ func (ui *ui) readExpr() {
 	}()
 }
 
-func (ui *ui) pause() {
-	ui.screen.Fini()
+func (ui *ui) suspend() {
+	ui.screen.Suspend()
 }
 
 func (ui *ui) resume() {
-	var screen tcell.Screen
-	var err error
-	if screen, err = tcell.NewScreen(); err != nil {
-		log.Fatalf("creating screen: %s", err)
-	} else if err = screen.Init(); err != nil {
-		log.Fatalf("initializing screen: %s", err)
+	ui.screen.Resume()
+}
+
+func anyKey() {
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
 	}
-	if gOpts.mouse {
-		screen.EnableMouse()
-	}
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	ui.screen = screen
-
-	go ui.pollEvents()
-
-	ui.renew()
+	fmt.Print("Press any key to continue")
+	b := make([]byte, 1)
+	os.Stdin.Read(b)
 }
 
 func listMatches(screen tcell.Screen, matches []string) (*bytes.Buffer, error) {

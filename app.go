@@ -12,8 +12,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/gdamore/tcell/v2"
 )
 
 type cmdItem struct {
@@ -35,10 +33,7 @@ type app struct {
 	timeout       time.Time
 }
 
-func newApp(screen tcell.Screen) *app {
-	ui := newUI(screen)
-	nav := newNav(ui.wins[0].h)
-
+func newApp(ui *ui, nav *nav) *app {
 	quitChan := make(chan struct{}, 1)
 
 	app := &app{
@@ -161,6 +156,8 @@ func (app *app) writeHistory() error {
 // for evaluation. Similarly directories and regular files are also read in
 // separate goroutines and sent here for update.
 func (app *app) loop() {
+	go app.nav.previewLoop(app.ui)
+
 	serverChan := readExpr()
 
 	app.ui.readExpr()
@@ -373,20 +370,6 @@ func (app *app) exportFiles() {
 	exportFiles(currFile, currSelections)
 }
 
-func waitKey() error {
-	cmd := pauseCommand()
-
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("waiting key: %s", err)
-	}
-
-	return nil
-}
-
 // This function is used to run a shell command. Modes are as follows:
 //
 //     Prefix  Wait  Async  Stdin  Stdout  Stderr  UI action
@@ -409,7 +392,7 @@ func (app *app) runShell(s string, args []string, prefix string) {
 		cmd.Stderr = os.Stderr
 
 		app.nav.previewChan <- ""
-		app.ui.pause()
+		app.ui.suspend()
 		defer app.ui.resume()
 		defer app.nav.renew()
 
@@ -437,9 +420,7 @@ func (app *app) runShell(s string, args []string, prefix string) {
 
 	switch prefix {
 	case "!":
-		if err := waitKey(); err != nil {
-			app.ui.echoerrf("waiting key: %s", err)
-		}
+		anyKey()
 	}
 
 	app.ui.loadFile(app.nav, true)

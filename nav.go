@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rjeczalik/notify"
 	times "gopkg.in/djherbis/times.v1"
 )
 
@@ -379,6 +380,7 @@ type nav struct {
 	visualStart     int
 	visualReverse   bool
 	oldSelections   map[string]int
+	notifyChan      chan notify.EventInfo
 }
 
 func newFlatDir(path string, level int) *dir {
@@ -514,6 +516,7 @@ func (nav *nav) loadDir(path string) *dir {
 			d.sort()
 			d.ind, d.pos = 0, 0
 			nav.dirChan <- d
+			notify.Watch(path, nav.notifyChan, notify.All)
 		}()
 		return d
 	}
@@ -648,7 +651,36 @@ func newNav(height int) *nav {
 		visualReverse:   false,
 		visualStart:     0,
 		oldSelections:   make(map[string]int),
+		notifyChan:      make(chan notify.EventInfo, 128),
 	}
+
+	go func() {
+		interval := 250 * time.Millisecond
+		delay := 50 * time.Millisecond
+		nextcheck := make(map[string]time.Time)
+		for ev := range nav.notifyChan {
+			path := filepath.Dir(ev.Path())
+			now := time.Now()
+			next := now
+			if latest, ok := nextcheck[path]; ok {
+				if now.Add(interval).Before(latest) {
+					continue
+				}
+				if now.After(latest) {
+					if latest.Add(interval).After(now) {
+						next = latest.Add(interval)
+					}
+				} else {
+					next = latest.Add(interval)
+				}
+			}
+			nextcheck[path] = next
+			go func() {
+				time.Sleep(time.Until(next.Add(delay)))
+				nav.loadDir(path)
+			}()
+		}
+	}()
 
 	nav.getDirs(wd)
 
@@ -685,6 +717,10 @@ func (nav *nav) exitVisual() {
 	nav.visualReverse = false
 }
 
+func (nav *nav) Stop() {
+	notify.Stop(nav.notifyChan)
+}
+
 func (nav *nav) renew() {
 	for _, d := range nav.dirs {
 		nav.checkDir(d)
@@ -709,6 +745,8 @@ func (nav *nav) reload() error {
 	if err != nil {
 		return fmt.Errorf("getting current directory: %s", err)
 	}
+
+	notify.Stop(nav.notifyChan)
 
 	curr, err := nav.currFile()
 	nav.getDirs(wd)
