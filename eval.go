@@ -212,6 +212,28 @@ func (e *setExpr) eval(app *app, args []string) {
 			return
 		}
 		gOpts.findtimeout = n
+	case "watchinterval":
+		n, err := strconv.Atoi(e.val)
+		if err != nil {
+			app.ui.echoerrf("watchinterval: %s", err)
+			return
+		}
+		if n < 0 {
+			app.ui.echoerr("watchinterval: value should be a non-negative number")
+			return
+		}
+		gOpts.watchinterval = n
+	case "watchdelay":
+		n, err := strconv.Atoi(e.val)
+		if err != nil {
+			app.ui.echoerrf("watchdelay: %s", err)
+			return
+		}
+		if n < 0 {
+			app.ui.echoerr("watchdelay: value should be a non-negative number")
+			return
+		}
+		gOpts.watchdelay = n
 	case "period":
 		n, err := strconv.Atoi(e.val)
 		if err != nil {
