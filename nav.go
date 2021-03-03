@@ -420,10 +420,10 @@ func newNav(height int) *nav {
 	}
 
 	go func() {
-		interval := 250 * time.Millisecond
-		delay := 50 * time.Millisecond
 		nextcheck := make(map[string]time.Time)
 		for ev := range nav.notifyChan {
+			interval := time.Duration(gOpts.watchinterval) * time.Millisecond
+			delay := time.Duration(gOpts.watchdelay) * time.Millisecond
 			path := filepath.Dir(ev.Path())
 			now := time.Now()
 			next := now
