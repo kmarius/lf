@@ -287,11 +287,6 @@ func (app *app) loop() {
 				d.sel(prev.name(), app.nav.height)
 			}
 
-			if resolved, err := filepath.EvalSymlinks(d.path); err == nil {
-				if resolved != d.path {
-					app.nav.dirCache[resolved] = d
-				}
-			}
 			app.nav.dirCache[d.path] = d
 
 			for i := range app.nav.dirs {
