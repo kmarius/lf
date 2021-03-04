@@ -121,6 +121,7 @@ type dir struct {
 	ind          int       // index of current entry in files
 	pos          int       // position of current entry in ui
 	path         string    // full path of directory
+	realpath    string
 	files        []*file   // displayed files in directory including or excluding hidden ones
 	allFiles     []*file   // all files in directory including hidden ones (same array as files)
 	sortType     sortType  // sort method and options from last sort
@@ -145,9 +146,15 @@ func newDir(path string) *dir {
 		log.Printf("reading directory: %s", err)
 	}
 
+	realpath := path
+	if r, err := filepath.EvalSymlinks(path); err == nil {
+		realpath = r
+	}
+
 	return &dir{
 		loadTime: time,
 		path:     path,
+		realpath: realpath,
 		files:    files,
 		allFiles: files,
 		noPerm:   os.IsPermission(err),
@@ -566,6 +573,7 @@ func (nav *nav) checkFlatDir(flatDir *dir) {
 }
 
 func (nav *nav) checkDir(dir *dir) {
+	log.Println("checkin ", dir.path)
 	s, err := os.Stat(dir.path)
 	if err != nil {
 		log.Printf("getting directory info: %s", err)
@@ -677,7 +685,14 @@ func newNav(height int) *nav {
 			nextcheck[path] = next
 			go func() {
 				time.Sleep(time.Until(next.Add(delay)))
-				nav.loadDir(path)
+				for _, d := range nav.dirs {
+					if d.realpath == path {
+						nav.checkDir(d)
+					}
+				}
+				if curr, err := nav.currFile(); err == nil && curr.IsDir() {
+					nav.loadDir(curr.path)
+				}
 			}()
 		}
 	}()
