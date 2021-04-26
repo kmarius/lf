@@ -41,15 +41,27 @@ func (e *setExpr) eval(app *app, args []string) {
 	case "drawbox":
 		gOpts.drawbox = true
 		app.ui.renew()
-		app.nav.height = app.ui.wins[0].h
+		if app.nav.height != app.ui.wins[0].h {
+			app.nav.height = app.ui.wins[0].h
+			app.nav.regCache = make(map[string]*reg)
+		}
+		app.ui.loadFile(app.nav, true)
 	case "nodrawbox":
 		gOpts.drawbox = false
 		app.ui.renew()
-		app.nav.height = app.ui.wins[0].h
+		if app.nav.height != app.ui.wins[0].h {
+			app.nav.height = app.ui.wins[0].h
+			app.nav.regCache = make(map[string]*reg)
+		}
+		app.ui.loadFile(app.nav, true)
 	case "drawbox!":
 		gOpts.drawbox = !gOpts.drawbox
 		app.ui.renew()
-		app.nav.height = app.ui.wins[0].h
+		if app.nav.height != app.ui.wins[0].h {
+			app.nav.height = app.ui.wins[0].h
+			app.nav.regCache = make(map[string]*reg)
+		}
+		app.ui.loadFile(app.nav, true)
 	case "globsearch":
 		gOpts.globsearch = true
 	case "noglobsearch":
@@ -178,6 +190,8 @@ func (e *setExpr) eval(app *app, args []string) {
 		gOpts.smartdia = false
 	case "smartdia!":
 		gOpts.smartdia = !gOpts.smartdia
+	case "waitmsg":
+		gOpts.waitmsg = e.val
 	case "wrapscan":
 		gOpts.wrapscan = true
 	case "nowrapscan":
@@ -342,6 +356,8 @@ func (e *setExpr) eval(app *app, args []string) {
 		app.ui.loadFile(app.nav, true)
 	case "shell":
 		gOpts.shell = e.val
+	case "shellflag":
+		gOpts.shellflag = e.val
 	case "shellopts":
 		if e.val == "" {
 			gOpts.shellopts = nil
@@ -984,7 +1000,10 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 	case "redraw":
 		app.ui.renew()
 		app.ui.screen.Sync()
-		app.nav.height = app.ui.wins[0].h
+		if app.nav.height != app.ui.wins[0].h {
+			app.nav.height = app.ui.wins[0].h
+			app.nav.regCache = make(map[string]*reg)
+		}
 		app.ui.loadFile(app.nav, true)
 	case "load":
 		app.nav.renew()
@@ -1453,6 +1472,22 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			if _, err := app.nav.searchPrev(); err != nil {
 				app.ui.echoerrf("search-back: %s: %s", err, app.nav.search)
 			} else if old != dir.ind {
+				app.ui.loadFile(app.nav, true)
+				app.ui.loadFileInfo(app.nav)
+			}
+		case "find: ":
+			app.ui.cmdPrefix = ""
+			if moved, found := app.nav.findNext(); !found {
+				app.ui.echoerrf("find: pattern not found: %s", app.nav.find)
+			} else if moved {
+				app.ui.loadFile(app.nav, true)
+				app.ui.loadFileInfo(app.nav)
+			}
+		case "find-back: ":
+			app.ui.cmdPrefix = ""
+			if moved, found := app.nav.findPrev(); !found {
+				app.ui.echoerrf("find-back: pattern not found: %s", app.nav.find)
+			} else if moved {
 				app.ui.loadFile(app.nav, true)
 				app.ui.loadFileInfo(app.nav)
 			}

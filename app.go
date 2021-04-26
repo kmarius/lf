@@ -175,11 +175,11 @@ func (app *app) loop() {
 		}()
 	}
 
-	if gCustomConfig != "" {
-		if _, err := os.Stat(gCustomConfig); !os.IsNotExist(err) {
-			app.readFile(gCustomConfig)
+	if gConfigPath != "" {
+		if _, err := os.Stat(gConfigPath); !os.IsNotExist(err) {
+			app.readFile(gConfigPath)
 		} else {
-			log.Printf("Config file does not exist: %s", err)
+			log.Printf("config file does not exist: %s", err)
 		}
 	} else {
 		for _, path := range gConfigPaths {
@@ -375,7 +375,7 @@ func (app *app) exportFiles() {
 
 	currSelections := app.nav.currSelections()
 
-	exportFiles(currFile, currSelections)
+	exportFiles(currFile, currSelections, app.nav.currDir().path)
 }
 
 // This function is used to run a shell command. Modes are as follows:
@@ -400,8 +400,17 @@ func (app *app) runShell(s string, args []string, prefix string) {
 		cmd.Stderr = os.Stderr
 
 		app.nav.previewChan <- ""
-		app.ui.suspend()
-		defer app.ui.resume()
+		if err := app.ui.suspend(); err != nil {
+			log.Printf("suspend: %s", err)
+		}
+		defer func() {
+			if err := app.ui.resume(); err != nil {
+				app.writeHistory()
+				os.Remove(gLogPath)
+				os.Exit(3)
+				return
+			}
+		}()
 		defer app.nav.renew()
 
 		err = cmd.Run()

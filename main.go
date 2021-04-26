@@ -31,7 +31,7 @@ var (
 	gLogPath       string
 	gServerLogPath string
 	gSelect        string
-	gCustomConfig  string
+	gConfigPath    string
 	gCommands      arrayFlag
 	gVersion       string
 )
@@ -64,6 +64,12 @@ func exportEnvVars() {
 	os.Setenv("EDITOR", envEditor)
 	os.Setenv("PAGER", envPager)
 	os.Setenv("SHELL", envShell)
+
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
+	}
+	os.Setenv("OLDPWD", dir)
 
 	level, err := strconv.Atoi(envLevel)
 	if err != nil {
@@ -188,15 +194,15 @@ func main() {
 		false,
 		"show version")
 
-	remoteCmd := flag.String(
-		"remote",
-		"",
-		"send remote command to server")
-
 	serverMode := flag.Bool(
 		"server",
 		false,
 		"start server (automatic)")
+
+	remoteCmd := flag.String(
+		"remote",
+		"",
+		"send remote command to server")
 
 	cpuprofile := flag.String(
 		"cpuprofile",
@@ -218,10 +224,10 @@ func main() {
 		"",
 		"path to the file to write selected files on open (to use as open file dialog)")
 
-	flag.StringVar(&gCustomConfig,
+	flag.StringVar(&gConfigPath,
 		"config",
 		"",
-		"path to a custom config file to be used, instead of normal lfrc file")
+		"path to the config file (instead of the usual paths)")
 
 	flag.Var(&gCommands,
 		"command",

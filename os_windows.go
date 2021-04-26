@@ -22,6 +22,7 @@ var envPathExt = os.Getenv("PATHEXT")
 
 var (
 	gDefaultShell      = "cmd"
+	gDefaultShellFlag  = "/c"
 	gDefaultSocketProt = "tcp"
 	gDefaultSocketPath = "127.0.0.1:12345"
 )
@@ -77,7 +78,7 @@ func detachedCommand(name string, arg ...string) *exec.Cmd {
 }
 
 func shellCommand(s string, args []string) *exec.Cmd {
-	args = append([]string{"/c", s}, args...)
+	args = append([]string{gOpts.shellflag, s}, args...)
 
 	args = append(gOpts.shellopts, args...)
 
@@ -133,7 +134,7 @@ func errCrossDevice(err error) bool {
 	return err.(*os.LinkError).Err.(syscall.Errno) == 17
 }
 
-func exportFiles(f string, fs []string) {
+func exportFiles(f string, fs []string, pwd string) {
 	envFile := fmt.Sprintf(`"%s"`, f)
 
 	var quotedFiles []string
@@ -144,6 +145,7 @@ func exportFiles(f string, fs []string) {
 
 	os.Setenv("f", envFile)
 	os.Setenv("fs", envFiles)
+	os.Setenv("PWD", pwd)
 
 	if len(fs) == 0 {
 		os.Setenv("fx", envFile)

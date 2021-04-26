@@ -171,7 +171,7 @@ func printLength(s string) int {
 		r, w := utf8.DecodeRuneInString(s[i:])
 
 		if r == gEscapeCode && i+1 < len(s) && s[i+1] == '[' {
-			j := strings.IndexByte(s[i:min(len(s), i+32)], 'm')
+			j := strings.IndexByte(s[i:min(len(s), i+64)], 'm')
 			if j == -1 {
 				continue
 			}
@@ -199,7 +199,7 @@ func (win *win) print(screen tcell.Screen, x, y int, st tcell.Style, s string) t
 		r, w := utf8.DecodeRuneInString(s[i:])
 
 		if r == gEscapeCode && i+1 < len(s) && s[i+1] == '[' {
-			j := strings.IndexByte(s[i:min(len(s), i+32)], 'm')
+			j := strings.IndexByte(s[i:min(len(s), i+64)], 'm')
 			if j == -1 {
 				continue
 			}
@@ -1148,22 +1148,23 @@ func (ui *ui) readExpr() {
 	}()
 }
 
-func (ui *ui) suspend() {
-	ui.screen.Suspend()
+func (ui *ui) suspend() error {
+	return ui.screen.Suspend()
 }
 
-func (ui *ui) resume() {
-	ui.screen.Resume()
+func (ui *ui) resume() error {
+	return ui.screen.Resume()
 }
 
 func anyKey() {
+	fmt.Print(gOpts.waitmsg)
+	defer fmt.Print("\n")
 	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
 	if err != nil {
 		panic(err)
 	}
 	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	fmt.Print("Press any key to continue")
 	b := make([]byte, 1)
 	os.Stdin.Read(b)
 }
