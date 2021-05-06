@@ -447,7 +447,6 @@ func newNav(height int) *nav {
 			path := filepath.Dir(ev.Path())
 			now := time.Now()
 			next := now
-			log.Printf("event: %s", ev.Event())
 			force := false
 			switch ev.Event() {
 			case notify.InModify, notify.InCloseWrite:
