@@ -592,7 +592,6 @@ func (nav *nav) reloadDir(dir *dir, force bool) {
 }
 
 func (nav *nav) checkDir(dir *dir) {
-	log.Println("checkin ", dir.path)
 	s, err := os.Stat(dir.path)
 	if err != nil {
 		log.Printf("getting directory info: %s", err)
