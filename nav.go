@@ -121,14 +121,14 @@ type dir struct {
 	ind          int       // index of current entry in files
 	pos          int       // position of current entry in ui
 	path         string    // full path of directory
-	realpath    string
-	files        []*file   // displayed files in directory including or excluding hidden ones
-	allFiles     []*file   // all files in directory including hidden ones (same array as files)
-	sortType     sortType  // sort method and options from last sort
-	hiddenfiles  []string  // hiddenfiles value from last sort
-	ignorecase   bool      // ignorecase value from last sort
-	ignoredia    bool      // ignoredia value from last sort
-	noPerm       bool      // whether lf has no permission to open the directory
+	realpath     string
+	files        []*file  // displayed files in directory including or excluding hidden ones
+	allFiles     []*file  // all files in directory including hidden ones (same array as files)
+	sortType     sortType // sort method and options from last sort
+	hiddenfiles  []string // hiddenfiles value from last sort
+	ignorecase   bool     // ignorecase value from last sort
+	ignoredia    bool     // ignoredia value from last sort
+	noPerm       bool     // whether lf has no permission to open the directory
 	flatLevel    int
 	flatFiles    []*file
 	filterString string
@@ -527,7 +527,7 @@ func (nav *nav) loadDir(path string) *dir {
 			d.sort()
 			d.ind, d.pos = 0, 0
 			nav.dirChan <- d
-			notify.Watch(path, nav.notifyChan, notify.All)
+			notify.Watch(path, nav.notifyChan, notify.All, notify.InModify, notify.InCloseWrite)
 		}()
 		return d
 	}
@@ -574,6 +574,21 @@ func (nav *nav) checkFlatDir(flatDir *dir) {
 			}
 		}
 	}
+}
+
+func (nav *nav) reloadDir(dir *dir, force bool) {
+	if !force {
+		nav.checkDir(dir)
+		return
+	}
+
+	dir.loading = true
+	dir.loadTime = time.Now()
+	go func() {
+		nd := newDir(dir.path)
+		nd.sort()
+		nav.dirChan <- nd
+	}()
 }
 
 func (nav *nav) checkDir(dir *dir) {
@@ -674,6 +689,12 @@ func newNav(height int) *nav {
 			path := filepath.Dir(ev.Path())
 			now := time.Now()
 			next := now
+			log.Printf("event: %s", ev.Event())
+			force := false
+			switch ev.Event() {
+			case notify.InModify, notify.InCloseWrite:
+				force = true
+			}
 			if latest, ok := nextcheck[path]; ok {
 				if now.Add(interval).Before(latest) {
 					continue
@@ -691,7 +712,7 @@ func newNav(height int) *nav {
 				time.Sleep(time.Until(next.Add(delay)))
 				for _, d := range nav.dirs {
 					if d.realpath == path {
-						nav.checkDir(d)
+						nav.reloadDir(d, force)
 					}
 				}
 				if curr, err := nav.currFile(); err == nil && curr.IsDir() {
