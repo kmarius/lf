@@ -347,24 +347,7 @@ func (nav *nav) loadDir(path string) *dir {
 	return d
 }
 
-func (nav *nav) reloadDir(dir *dir, force bool) {
-
-	if !force {
-		nav.checkDir(dir)
-		return
-	}
-
-	dir.loading = true
-	dir.loadTime = time.Now()
-	go func() {
-		nd := newDir(dir.path)
-		nd.sort()
-		nav.dirChan <- nd
-	}()
-}
-
 func (nav *nav) checkDir(dir *dir) {
-	log.Println("checkin ", dir.path)
 	s, err := os.Stat(dir.path)
 	if err != nil {
 		log.Printf("getting directory info: %s", err)
@@ -452,10 +435,6 @@ func newNav(height int) *nav {
 			now := time.Now()
 			next := now
 			force := false
-			switch ev.Event() {
-			case notify.InModify, notify.InCloseWrite:
-				force = true
-			}
 			if latest, ok := nextcheck[path]; ok {
 				if now.Add(interval).Before(latest) {
 					continue
@@ -469,15 +448,31 @@ func newNav(height int) *nav {
 				}
 			}
 			nextcheck[path] = next
+			switch ev.Event() {
+			case notify.InModify, notify.InCloseWrite:
+				force = true
+			}
 			go func() {
 				time.Sleep(time.Until(next.Add(delay)))
 				for _, d := range nav.dirs {
 					if d.realpath == path {
-						nav.reloadDir(d, force)
+						if force {
+							d.loading = true
+							d.loadTime = time.Now()
+							go func() {
+								nd := newDir(d.path)
+								nd.sort()
+								nav.dirChan <- nd
+							}()
+						} else {
+							nav.checkDir(d)
+						}
 					}
 				}
 				if curr, err := nav.currFile(); err == nil && curr.IsDir() {
-					nav.loadDir(curr.path)
+					if curr.path == path {
+						nav.loadDir(curr.path)
+					}
 				}
 			}()
 		}
