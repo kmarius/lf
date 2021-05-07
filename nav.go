@@ -38,6 +38,13 @@ type file struct {
 	ext        string
 }
 
+func (file *file) reload() {
+	if lstat, err := os.Lstat(file.path); err == nil {
+		log.Printf("reloading %s", file.path)
+		file.FileInfo = lstat
+	}
+}
+
 func readdir(path string) ([]*file, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -432,9 +439,10 @@ func newNav(height int) *nav {
 			interval := time.Duration(gOpts.watchinterval) * time.Millisecond
 			delay := time.Duration(gOpts.watchdelay) * time.Millisecond
 			path := filepath.Dir(ev.Path())
+			fname := filepath.Base(ev.Path())
 			now := time.Now()
 			next := now
-			force := false
+			updateFile := false
 			if latest, ok := nextcheck[path]; ok {
 				if now.Add(interval).Before(latest) {
 					continue
@@ -450,20 +458,20 @@ func newNav(height int) *nav {
 			nextcheck[path] = next
 			switch ev.Event() {
 			case notify.InModify, notify.InCloseWrite:
-				force = true
+				updateFile = true
 			}
 			go func() {
 				time.Sleep(time.Until(next.Add(delay)))
 				for _, d := range nav.dirs {
 					if d.realpath == path {
-						if force {
-							d.loading = true
-							d.loadTime = time.Now()
-							go func() {
-								nd := newDir(d.path)
-								nd.sort()
-								nav.dirChan <- nd
-							}()
+						if updateFile {
+							for _, f := range d.files {
+								if fname == filepath.Base(f.path) {
+									f.reload()
+									nav.regChan <- nil
+									break
+								}
+							}
 						} else {
 							nav.checkDir(d)
 						}
