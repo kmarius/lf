@@ -318,6 +318,10 @@ func (app *app) loop() {
 
 			app.ui.draw(app.nav)
 		case r := <-app.nav.regChan:
+			if r == nil {
+				app.ui.draw(app.nav)
+				continue
+			}
 			app.nav.checkReg(r)
 
 			app.nav.regCache[r.path] = r
