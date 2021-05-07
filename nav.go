@@ -50,7 +50,6 @@ func (f *file) Name() string {
 
 func (file *file) reload() {
 	if lstat, err := os.Lstat(file.path); err == nil {
-		log.Printf("reloading %s", file.path)
 		file.FileInfo = lstat
 	}
 }
