@@ -323,6 +323,7 @@ type nav struct {
 	searchPos       int
 	volatilePreview bool
 	notifyChan      chan notify.EventInfo
+	suspended       bool
 }
 
 func (nav *nav) loadDir(path string) *dir {
@@ -406,6 +407,13 @@ func (nav *nav) getDirs(wd string) {
 	nav.dirs = dirs
 }
 
+func (nav *nav) suspendWatchers() {
+	nav.suspended = true
+}
+func (nav *nav) resumeWatchers() {
+	nav.suspended = false
+}
+
 func newNav(height int) *nav {
 	wd, err := os.Getwd()
 	if err != nil {
@@ -430,6 +438,7 @@ func newNav(height int) *nav {
 		selectionInd:    0,
 		height:          height,
 		notifyChan:      make(chan notify.EventInfo, 128),
+		suspended:       false,
 	}
 
 	go func() {
@@ -461,6 +470,9 @@ func newNav(height int) *nav {
 			}
 			go func() {
 				time.Sleep(time.Until(next.Add(delay)))
+				if nav.suspended {
+					return
+				}
 				for _, d := range nav.dirs {
 					if d.realpath == path {
 						if updateFile {
