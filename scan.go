@@ -14,7 +14,7 @@ const (
 	// no explicit keyword type
 	tokenIdent     // e.g. set, ratios, 1:2:3
 	tokenColon     // :
-	tokenPrefix    // $, %, !, &
+	tokenPrefix    // $, %, !, &, +
 	tokenLBraces   // {{
 	tokenRBraces   // }}
 	tokenCommand   // in between a prefix to \n or between {{ and }}
@@ -94,7 +94,7 @@ func isDigit(b byte) bool {
 
 func isPrefix(b byte) bool {
 	switch b {
-	case '$', '%', '!', '&':
+	case '$', '%', '!', '&', '+':
 		return true
 	}
 	return false

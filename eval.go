@@ -639,7 +639,16 @@ func insert(app *app, arg string) {
 }
 
 func (e *callExpr) eval(app *app, args []string) {
+	defer LuaHook(app, e.name, e.args)
 	switch e.name {
+	case "lua":
+		LuaRun(app, strings.Join(e.args, " "), args)
+	case "luasource":
+		if len(e.args) != 1 {
+			app.ui.echoerr("luasource: requires an argument")
+			return
+		}
+		LuaSource(app, e.args[0])
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
@@ -1634,6 +1643,9 @@ func (e *execExpr) eval(app *app, args []string) {
 	case "&":
 		log.Printf("shell-async: %s -- %s", e, args)
 		app.runShell(e.value, args, e.prefix)
+	case "+":
+		log.Printf("lua: %s -- %s", e, args)
+		LuaRun(app, e.value, args)
 	default:
 		log.Printf("evaluating unknown execution prefix: %q", e.prefix)
 	}

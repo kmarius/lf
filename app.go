@@ -12,6 +12,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/Shopify/go-lua"
 )
 
 type cmdItem struct {
@@ -20,6 +22,7 @@ type cmdItem struct {
 }
 
 type app struct {
+	luaState      *lua.State
 	ui            *ui
 	nav           *nav
 	ticker        *time.Ticker
@@ -41,6 +44,7 @@ func newApp(ui *ui, nav *nav) *app {
 		ticker:   new(time.Ticker),
 		quitChan: quitChan,
 	}
+	app.luaState = LuaInit(app)
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM)
