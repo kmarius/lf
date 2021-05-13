@@ -1447,15 +1447,14 @@ func (nav *nav) sync() error {
 	if err != nil {
 		return err
 	}
-	path, ok := nav.marks["'"]
 
 	nav.saves = make(map[string]bool)
 	for _, f := range list {
 		nav.saves[f] = cp
 	}
 
+	path, ok := nav.marks["'"]
 	err = nav.readMarks()
-
 	if ok {
 		nav.marks["'"] = path
 	}
