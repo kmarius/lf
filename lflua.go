@@ -8,12 +8,6 @@ import (
 )
 
 var lfLib = `
-lf.set = lf.eval_set
-
-lf.cmd = function (name, cmd) lf.eval("cmd " .. name .. " " .. cmd) end
-
-lf.map = function (key, val) lf.eval("map " .. key .. " " .. val) end
-
 lf.echo = function (...) lf.eval_call("echo", ...) end
 lf.echomsg = function (...) lf.eval_call("echomsg", ...) end
 lf.echoerr = function (...) lf.eval_call("echoerr", ...) end
@@ -24,19 +18,21 @@ lf.shell_wait = function (...) lf.eval_exec("!", ...) end
 lf.shell_async = function (...) lf.eval_exec("&", ...) end
 
 lf.push = function (...) lf.eval("push", ...) end
+lf.cmd = function (name, cmd) lf.eval("cmd " .. name .. " " .. cmd) end
+lf.map = function (key, val) lf.eval("map " .. key .. " " .. val) end
 
-command_hooks = {}
+lf.command_hooks = {}
 
 function lf.register_command_hook (cmd, f)
-	funs = command_hooks[cmd]
+	funs = lf.command_hooks[cmd]
 	if funs == nil then
-		command_hooks[cmd] = {f}
+		lf.command_hooks[cmd] = {f}
 	else
 		funs[#funs+1] = f
 	end
 end
 function run_command_hook (cmd, ...)
-	funs = command_hooks[cmd]
+	funs = lf.command_hooks[cmd]
 	if funs ~= nil then
 		for _, f in pairs(funs) do
 			f(...)
@@ -94,7 +90,7 @@ func LuaInit(app *app) *lua.State {
 		return 0
 	})
 
-	register(l, "lf.eval_set", func(l *lua.State) int {
+	register(l, "lf.set", func(l *lua.State) int {
 		opt, _ := l.ToString(1)
 		val, _ := l.ToString(2)
 		e := &setExpr{opt: opt, val: val}
