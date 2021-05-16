@@ -114,6 +114,17 @@ func LuaInit(app *app) *lua.State {
 
 	register(l, "lf.get", lfOptGet)
 
+	l.Register("stringsplit", func(l *lua.State) int {
+		s, _ := l.ToString(1)
+		sep, _ := l.ToString(2)
+		tokens := strings.Split(s, sep)
+		for _, tok := range tokens {
+			l.PushString(tok)
+			log.Print(tok)
+		}
+		return len(tokens)
+	})
+
 	if err := lua.DoString(l, lfLib); err != nil {
 		app.ui.echoerr(err.Error())
 	}
@@ -147,12 +158,10 @@ func LuaHook(app *app, cmd string, args []string) {
 	l := app.luaState
 	l.Global("run_command_hook")
 	l.PushString(cmd)
-	c := 0
 	for _, s := range args {
 		l.PushString(s)
-		c++
 	}
-	l.Call(c+1, 0)
+	l.Call(len(args)+1, 0)
 }
 
 // var gOpts struct {
@@ -264,26 +273,20 @@ func lfOptGet(l *lua.State) int {
 		}
 		return len(gOpts.ratios)
 	case "hiddenfiles":
-		c := 0
 		for _, el := range gOpts.hiddenfiles {
 			l.PushString(el)
-			c++
 		}
-		return c
+		return len(gOpts.hiddenfiles)
 	case "info":
-		c := 0
 		for _, el := range gOpts.info {
 			l.PushString(el)
-			c++
 		}
-		return c
+		return len(gOpts.info)
 	case "shellopts":
-		c := 0
 		for _, el := range gOpts.shellopts {
 			l.PushString(el)
-			c++
 		}
-		return c
+		return len(gOpts.shellopts)
 	default:
 		return -1
 	}
