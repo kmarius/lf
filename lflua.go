@@ -7,7 +7,64 @@ import (
 	"github.com/Shopify/go-lua"
 )
 
-var lfLib = `
+func lfLibrary(app *app) []lua.RegistryFunction {
+	return []lua.RegistryFunction{
+		{"eval", func(l *lua.State) int {
+			s, _ := l.ToString(1)
+			p := newParser(strings.NewReader(s))
+			for p.parse() {
+				p.expr.eval(app, nil)
+			}
+			if p.err != nil {
+				app.ui.echoerrf("%s", p.err)
+			}
+			return 0
+		}},
+		{"eval_exec", func(l *lua.State) int {
+			prefix, _ := l.ToString(1)
+			value, _ := l.ToString(2)
+			e := &execExpr{prefix: prefix, value: value}
+			e.eval(app, nil)
+			return 0
+		}},
+		{"eval_call", func(l *lua.State) int {
+			args := []string{}
+			cmd, _ := l.ToString(1)
+			for i := 2; i <= l.Top(); i++ {
+				arg, _ := l.ToString(i)
+				args = append(args, arg)
+			}
+			if cmd != "" {
+				e := &callExpr{cmd, args, 1}
+				e.eval(app, nil)
+			}
+			return 0
+		}},
+
+		{"set", func(l *lua.State) int {
+			opt, _ := l.ToString(1)
+			val, _ := l.ToString(2)
+			e := &setExpr{opt: opt, val: val}
+			e.eval(app, nil)
+			return 0
+		}},
+		{"unmap", func(l *lua.State) int {
+			key, _ := l.ToString(1)
+			if _, ok := gOpts.keys[key]; ok {
+				delete(gOpts.keys, key)
+			}
+			return 0
+		}},
+		{"log", func(l *lua.State) int {
+			s, _ := l.ToString(1)
+			log.Print(s)
+			return 0
+		}},
+		{"get", lfOptGet},
+	}
+}
+
+var lfHelpers = `
 lf.echo = function (...) lf.eval_call("echo", ...) end
 lf.echomsg = function (...) lf.eval_call("echomsg", ...) end
 lf.echoerr = function (...) lf.eval_call("echoerr", ...) end
@@ -17,7 +74,7 @@ lf.shell_pipe = function (...) lf.eval_exec("%", ...) end
 lf.shell_wait = function (...) lf.eval_exec("!", ...) end
 lf.shell_async = function (...) lf.eval_exec("&", ...) end
 
-lf.push = function (...) lf.eval("push", ...) end
+lf.push = function (...) lf.eval_call("push", ...) end
 lf.cmd = function (name, cmd) lf.eval("cmd " .. name .. " " .. cmd) end
 lf.map = function (key, val) lf.eval("map " .. key .. " " .. val) end
 
@@ -41,78 +98,18 @@ function run_command_hook (cmd, ...)
 end
 `
 
-func register(l *lua.State, name string, f lua.Function) {
-	regName := strings.Replace(name, ".", "_", -1)
-	l.Register(regName, f)
-	if name != regName {
-		lua.DoString(l, name+" = "+regName)
-	}
-}
-
 func LuaInit(app *app) *lua.State {
 	l := lua.NewState()
 	lua.OpenLibraries(l)
+	lua.Require(l, "lf", func(l *lua.State) int {
+		lua.NewLibrary(l, lfLibrary(app))
+		return 1
+	}, true)
+	l.Pop(1)
 
-	l.NewTable()
-	l.SetGlobal("lf")
-
-	register(l, "lf.eval", func(l *lua.State) int {
-		s, _ := l.ToString(1)
-		p := newParser(strings.NewReader(s))
-		for p.parse() {
-			p.expr.eval(app, nil)
-		}
-		if p.err != nil {
-			app.ui.echoerrf("%s", p.err)
-		}
-		return 0
-	})
-
-	register(l, "lf.eval_exec", func(l *lua.State) int {
-		prefix, _ := l.ToString(1)
-		value, _ := l.ToString(2)
-		e := &execExpr{prefix: prefix, value: value}
-		e.eval(app, nil)
-		return 0
-	})
-
-	register(l, "lf.eval_call", func(l *lua.State) int {
-		args := []string{}
-		cmd, _ := l.ToString(1)
-		for i := 2; i <= l.Top(); i++ {
-			arg, _ := l.ToString(i)
-			args = append(args, arg)
-		}
-		if cmd != "" {
-			e := &callExpr{cmd, args, 1}
-			e.eval(app, nil)
-		}
-		return 0
-	})
-
-	register(l, "lf.set", func(l *lua.State) int {
-		opt, _ := l.ToString(1)
-		val, _ := l.ToString(2)
-		e := &setExpr{opt: opt, val: val}
-		e.eval(app, nil)
-		return 0
-	})
-
-	register(l, "lf.unmap", func(l *lua.State) int {
-		key, _ := l.ToString(1)
-		if _, ok := gOpts.keys[key]; ok {
-			delete(gOpts.keys, key)
-		}
-		return 0
-	})
-
-	register(l, "lf.log", func(l *lua.State) int {
-		s, _ := l.ToString(1)
-		log.Print(s)
-		return 0
-	})
-
-	register(l, "lf.get", lfOptGet)
+	if err := lua.DoString(l, lfHelpers); err != nil {
+		app.ui.echoerr(err.Error())
+	}
 
 	l.Register("stringsplit", func(l *lua.State) int {
 		s, _ := l.ToString(1)
@@ -124,10 +121,6 @@ func LuaInit(app *app) *lua.State {
 		}
 		return len(tokens)
 	})
-
-	if err := lua.DoString(l, lfLib); err != nil {
-		app.ui.echoerr(err.Error())
-	}
 
 	return l
 }
@@ -141,7 +134,6 @@ func LuaSource(app *app, file string) {
 
 func LuaRun(app *app, str string, args []string) {
 	l := app.luaState
-	log.Printf("lua: %s -- %s\n", str, strings.Join(args, " "))
 	l.CreateTable(len(args), 0)
 	for i, arg := range args {
 		l.PushInteger(i + 1)

@@ -180,7 +180,11 @@ func (app *app) loop() {
 
 	if gConfigPath != "" {
 		if _, err := os.Stat(gConfigPath); !os.IsNotExist(err) {
-			app.readFile(gConfigPath)
+			if strings.HasSuffix(gConfigPath, ".lua") {
+				LuaSource(app, gConfigPath)
+			} else {
+				app.readFile(gConfigPath)
+			}
 		} else {
 			log.Printf("config file does not exist: %s", err)
 		}
