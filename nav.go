@@ -1244,10 +1244,15 @@ loop:
 
 	nav.copyTotalChan <- -total
 
-	if err := remote("send load"); err != nil {
-		errCount++
-		echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
-		ui.exprChan <- echo
+	if gSingleMode {
+		nav.renew()
+		ui.loadFile(nav, true)
+	} else {
+		if err := remote("send load"); err != nil {
+			errCount++
+			echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
+			ui.exprChan <- echo
+		}
 	}
 
 	if errCount == 0 {
@@ -1344,10 +1349,15 @@ func (nav *nav) moveAsync(ui *ui, srcs []string, dstDir string) {
 
 	nav.moveTotalChan <- -len(srcs)
 
-	if err := remote("send load"); err != nil {
-		errCount++
-		echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
-		ui.exprChan <- echo
+	if gSingleMode {
+		nav.renew()
+		ui.loadFile(nav, true)
+	} else {
+		if err := remote("send load"); err != nil {
+			errCount++
+			echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
+			ui.exprChan <- echo
+		}
 	}
 
 	if errCount == 0 {
@@ -1377,8 +1387,14 @@ func (nav *nav) paste(ui *ui) error {
 		return fmt.Errorf("clearing copy/cut buffer: %s", err)
 	}
 
-	if err := remote("send sync"); err != nil {
-		return fmt.Errorf("paste: %s", err)
+	if gSingleMode {
+		if err := nav.sync(); err != nil {
+			return fmt.Errorf("paste: %s", err)
+		}
+	} else {
+		if err := remote("send sync"); err != nil {
+			return fmt.Errorf("paste: %s", err)
+		}
 	}
 
 	return nil
@@ -1408,10 +1424,15 @@ func (nav *nav) del(ui *ui) error {
 
 		nav.deleteTotalChan <- -len(list)
 
-		if err := remote("send load"); err != nil {
-			errCount++
-			echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
-			ui.exprChan <- echo
+		if gSingleMode {
+			nav.renew()
+			ui.loadFile(nav, true)
+		} else {
+			if err := remote("send load"); err != nil {
+				errCount++
+				echo.args[0] = fmt.Sprintf("[%d] %s", errCount, err)
+				ui.exprChan <- echo
+			}
 		}
 	}()
 

@@ -50,14 +50,30 @@ func newApp(ui *ui, nav *nav) *app {
 		case os.Interrupt:
 			return
 		case syscall.SIGHUP, syscall.SIGQUIT, syscall.SIGTERM:
-			app.writeHistory()
-			os.Remove(gLogPath)
+			app.quit()
 			os.Exit(3)
 			return
 		}
 	}()
 
 	return app
+}
+
+func (app *app) quit() {
+	if err := app.writeHistory(); err != nil {
+		log.Printf("writing history file: %s", err)
+	}
+	if !gSingleMode {
+		if err := remote(fmt.Sprintf("drop %d", gClientID)); err != nil {
+			log.Printf("dropping connection: %s", err)
+		}
+		if gOpts.autoquit {
+			if err := remote("quit"); err != nil {
+				log.Printf("auto quitting server: %s", err)
+			}
+		}
+	}
+	os.Remove(gLogPath)
 }
 
 func (app *app) readFile(path string) {
@@ -79,6 +95,68 @@ func (app *app) readFile(path string) {
 	if p.err != nil {
 		app.ui.echoerrf("%s", p.err)
 	}
+}
+
+func loadFiles() (list []string, cp bool, err error) {
+	files, err := os.Open(gFilesPath)
+	if os.IsNotExist(err) {
+		err = nil
+		return
+	}
+	if err != nil {
+		err = fmt.Errorf("opening file selections file: %s", err)
+		return
+	}
+	defer files.Close()
+
+	s := bufio.NewScanner(files)
+
+	s.Scan()
+
+	switch s.Text() {
+	case "copy":
+		cp = true
+	case "move":
+		cp = false
+	default:
+		err = fmt.Errorf("unexpected option to copy file(s): %s", s.Text())
+		return
+	}
+
+	for s.Scan() && s.Text() != "" {
+		list = append(list, s.Text())
+	}
+
+	if s.Err() != nil {
+		err = fmt.Errorf("scanning file list: %s", s.Err())
+		return
+	}
+
+	log.Printf("loading files: %v", list)
+
+	return
+}
+
+func saveFiles(list []string, cp bool) error {
+	files, err := os.Create(gFilesPath)
+	if err != nil {
+		return fmt.Errorf("opening file selections file: %s", err)
+	}
+	defer files.Close()
+
+	log.Printf("saving files: %v", list)
+
+	if cp {
+		fmt.Fprintln(files, "copy")
+	} else {
+		fmt.Fprintln(files, "move")
+	}
+
+	for _, f := range list {
+		fmt.Fprintln(files, f)
+	}
+
+	return nil
 }
 
 func (app *app) readHistory() error {
@@ -158,7 +236,10 @@ func (app *app) writeHistory() error {
 func (app *app) loop() {
 	go app.nav.previewLoop(app.ui)
 
-	serverChan := readExpr()
+	var serverChan <-chan expr
+	if !gSingleMode {
+		serverChan = readExpr()
+	}
 
 	app.ui.readExpr()
 
@@ -219,13 +300,11 @@ func (app *app) loop() {
 				continue
 			}
 
+			app.quit()
+
 			app.nav.previewChan <- ""
 
 			log.Print("bye!")
-
-			if err := app.writeHistory(); err != nil {
-				log.Printf("writing history file: %s", err)
-			}
 
 			if gLastDirPath != "" {
 				f, err := os.Create(gLastDirPath)
@@ -411,8 +490,7 @@ func (app *app) runShell(s string, args []string, prefix string) {
 		}
 		defer func() {
 			if err := app.ui.resume(); err != nil {
-				app.writeHistory()
-				os.Remove(gLogPath)
+				app.quit()
 				os.Exit(3)
 				return
 			}

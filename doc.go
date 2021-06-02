@@ -98,6 +98,7 @@ The following command line commands are provided by lf:
 The following options can be used to customize the behavior of lf:
 
     anchorfind     bool      (default on)
+    autoquit       bool      (default off)
     dircounts      bool      (default off)
     dirfirst       bool      (default on)
     drawbox        bool      (default off)
@@ -183,6 +184,11 @@ Configuration files should be located at:
     os       system-wide             user-specific
     unix     /etc/lf/lfrc            ~/.config/lf/lfrc
     windows  C:\ProgramData\lf\lfrc  C:\Users\<user>\AppData\Local\lf\lfrc
+
+Selection file should be located at:
+
+    unix     ~/.local/share/lf/files
+    windows  C:\Users\<user>\AppData\Local\lf\files
 
 Marks file should be located at:
 
@@ -489,6 +495,10 @@ Character ':' is used as the separator for list options '[]int' and '[]string'.
 
 When this option is enabled, find command starts matching patterns from the beginning of file names, otherwise, it can match at an arbitrary position.
 
+    autoquit       bool      (default off)
+
+Automatically quit server when there are no clients left connected.
+
     dircounts      bool      (default off)
 
 When this option is enabled, directory sizes show the number of items inside instead of the size of directory file.
@@ -781,7 +791,7 @@ Command 'map' is used to bind a key to a command which can be builtin command, c
     map gh cd ~        # builtin command
     map D trash        # custom command
     map i $less $f     # shell command
-    map U !du -sh      # waiting shell command
+    map U !du -csh *   # waiting shell command
 
 Command 'cmap' is used to bind a key to a command line command which can only be one of the builtin commands:
 
@@ -996,10 +1006,11 @@ This is the recommended way of using remote commands since it is shorter and imm
 In this command 'send' is used to send the rest of the string as a command to all connected clients.
 You can optionally give it an id number to send a command to a single client:
 
-    lf -remote 'send 1000 echo hello world'
+    lf -remote 'send 1234 echo hello world'
 
 All clients have a unique id number but you may not be aware of the id number when you are writing a command.
 For this purpose, an '$id' variable is exported to the environment for shell commands.
+The value of this variable is set to the process id of the client.
 You can use it to send a remote command from a client to the server which in return sends a command back to itself.
 So now you can display a message in the current client by calling the following in a shell command:
 
@@ -1019,27 +1030,10 @@ For example, you can configure the number of columns in the ui with respect to t
         fi
     }}
 
-Besides 'send' command, there are also two commands to get or set the current file selection.
-Two possible modes 'copy' and 'move' specify whether selected files are to be copied or moved.
-File names are separated by newline character.
-Setting the file selection is done with 'save' command:
-
-    lf -remote "$(printf 'save\ncopy\nfoo.txt\nbar.txt\nbaz.txt\n')"
-
-Getting the file selection is similarly done with 'load' command:
-
-    load=$(lf -remote 'load')
-    mode=$(echo "$load" | sed -n '1p')
-    list=$(echo "$load" | sed '1d')
-    if [ $mode = 'copy' ]; then
-        # do something with $list
-    elif [ $mode = 'move' ]; then
-        # do something else with $list
-    fi
-
-There is a 'quit' command to close client connections and quit the server:
+Besides 'send' command, there is a 'quit' command to quit the server when there are no connected clients left, and a 'quit!' command to force quit the server by closing client connections first:
 
     lf -remote 'quit'
+    lf -remote 'quit!'
 
 Lastly, there is a 'conn' command to connect the server as a client.
 This should not be needed for users.
@@ -1057,7 +1051,7 @@ For cross-device moving, lf falls back to copying and then deletes the original 
 Operation errors are shown in the message line as well as the log file and they do not preemptively finish the corresponding file operation.
 
 File operations can be performed on the current selected file or alternatively on multiple files by selecting them first.
-When you 'copy' a file, lf doesn't actually copy the file on the disk, but only records its name to memory.
+When you 'copy' a file, lf doesn't actually copy the file on the disk, but only records its name to a file.
 The actual file copying takes place when you 'paste'.
 Similarly 'paste' after a 'cut' operation moves the file.
 
@@ -1066,7 +1060,7 @@ This is a special command that is called when it is defined instead of the built
 You can use the following example as a starting point:
 
     cmd paste %{{
-        load=$(lf -remote 'load')
+        load=$(cat ~/.local/share/lf/files)
         mode=$(echo "$load" | sed -n '1p')
         list=$(echo "$load" | sed '1d')
         if [ $mode = 'copy' ]; then
@@ -1074,7 +1068,7 @@ You can use the following example as a starting point:
         elif [ $mode = 'move' ]; then
             mv $list .
         fi
-        lf -remote 'send load'
+	rm ~/.local/share/lf/files
         lf -remote 'send clear'
     }}
 
@@ -1133,6 +1127,7 @@ It is possible to use different command types:
 You may want to use either file extensions or mime types from 'file' command:
 
     cmd open ${{
+        test -L $f && f=$(readlink -f $f)
         case $(file --mime-type $f -b) in
             text/*) vi $fx;;
             *) for f in $fx; do xdg-open $f > /dev/null 2> /dev/null & done;;

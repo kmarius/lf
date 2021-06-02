@@ -20,6 +20,12 @@ func (e *setExpr) eval(app *app, args []string) {
 		gOpts.anchorfind = false
 	case "anchorfind!":
 		gOpts.anchorfind = !gOpts.anchorfind
+	case "autoquit":
+		gOpts.autoquit = true
+	case "noautoquit":
+		gOpts.autoquit = false
+	case "autoquit!":
+		gOpts.autoquit = !gOpts.autoquit
 	case "dircounts":
 		gOpts.dircounts = true
 	case "nodircounts":
@@ -592,9 +598,14 @@ func insert(app *app, arg string) {
 				return
 			}
 			app.nav.unselect()
-			if err := remote("send load"); err != nil {
-				app.ui.echoerrf("delete: %s", err)
-				return
+			if gSingleMode {
+				app.nav.renew()
+				app.ui.loadFile(app.nav, true)
+			} else {
+				if err := remote("send load"); err != nil {
+					app.ui.echoerrf("delete: %s", err)
+					return
+				}
 			}
 			app.ui.loadFile(app.nav, true)
 			app.ui.loadFileInfo(app.nav)
@@ -607,9 +618,14 @@ func insert(app *app, arg string) {
 				app.ui.echoerrf("rename: %s", err)
 				return
 			}
-			if err := remote("send load"); err != nil {
-				app.ui.echoerrf("rename: %s", err)
-				return
+			if gSingleMode {
+				app.nav.renew()
+				app.ui.loadFile(app.nav, true)
+			} else {
+				if err := remote("send load"); err != nil {
+					app.ui.echoerrf("rename: %s", err)
+					return
+				}
 			}
 			app.ui.loadFile(app.nav, true)
 			app.ui.loadFileInfo(app.nav)
@@ -626,9 +642,14 @@ func insert(app *app, arg string) {
 				app.ui.echoerrf("rename: %s", err)
 				return
 			}
-			if err := remote("send load"); err != nil {
-				app.ui.echoerrf("rename: %s", err)
-				return
+			if gSingleMode {
+				app.nav.renew()
+				app.ui.loadFile(app.nav, true)
+			} else {
+				if err := remote("send load"); err != nil {
+					app.ui.echoerrf("rename: %s", err)
+					return
+				}
 			}
 			app.ui.loadFile(app.nav, true)
 			app.ui.loadFileInfo(app.nav)
@@ -645,8 +666,14 @@ func insert(app *app, arg string) {
 		if err := app.nav.writeMarks(); err != nil {
 			app.ui.echoerrf("mark-save: %s", err)
 		}
-		if err := remote("send sync"); err != nil {
-			app.ui.echoerrf("mark-save: %s", err)
+		if gSingleMode {
+			if err := app.nav.sync(); err != nil {
+				app.ui.echoerrf("mark-save: %s", err)
+			}
+		} else {
+			if err := remote("send sync"); err != nil {
+				app.ui.echoerrf("mark-save: %s", err)
+			}
 		}
 	case app.ui.cmdPrefix == "mark-load: ":
 		normal(app)
@@ -682,8 +709,14 @@ func insert(app *app, arg string) {
 			app.ui.echoerrf("mark-remove: %s", err)
 			return
 		}
-		if err := remote("send sync"); err != nil {
-			app.ui.echoerrf("mark-remove: %s", err)
+		if gSingleMode {
+			if err := app.nav.sync(); err != nil {
+				app.ui.echoerrf("mark-remove: %s", err)
+			}
+		} else {
+			if err := remote("send sync"); err != nil {
+				app.ui.echoerrf("mark-remove: %s", err)
+			}
 		}
 	default:
 		app.ui.cmdAccLeft = append(app.ui.cmdAccLeft, []rune(arg)...)
@@ -938,9 +971,16 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			return
 		}
 		app.nav.unselect()
-		if err := remote("send sync"); err != nil {
-			app.ui.echoerrf("copy: %s", err)
-			return
+		if gSingleMode {
+			if err := app.nav.sync(); err != nil {
+				app.ui.echoerrf("copy: %s", err)
+				return
+			}
+		} else {
+			if err := remote("send sync"); err != nil {
+				app.ui.echoerrf("copy: %s", err)
+				return
+			}
 		}
 		app.ui.loadFileInfo(app.nav)
 	case "cut":
@@ -949,9 +989,16 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			return
 		}
 		app.nav.unselect()
-		if err := remote("send sync"); err != nil {
-			app.ui.echoerrf("cut: %s", err)
-			return
+		if gSingleMode {
+			if err := app.nav.sync(); err != nil {
+				app.ui.echoerrf("cut: %s", err)
+				return
+			}
+		} else {
+			if err := remote("send sync"); err != nil {
+				app.ui.echoerrf("cut: %s", err)
+				return
+			}
 		}
 		app.ui.loadFileInfo(app.nav)
 	case "paste":
@@ -967,9 +1014,14 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 		if cmd, ok := gOpts.cmds["delete"]; ok {
 			cmd.eval(app, e.args)
 			app.nav.unselect()
-			if err := remote("send load"); err != nil {
-				app.ui.echoerrf("delete: %s", err)
-				return
+			if gSingleMode {
+				app.nav.renew()
+				app.ui.loadFile(app.nav, true)
+			} else {
+				if err := remote("send load"); err != nil {
+					app.ui.echoerrf("delete: %s", err)
+					return
+				}
 			}
 		} else {
 			list, err := app.nav.currFileOrSelections()
@@ -991,9 +1043,16 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 			app.ui.echoerrf("clear: %s", err)
 			return
 		}
-		if err := remote("send sync"); err != nil {
-			app.ui.echoerrf("clear: %s", err)
-			return
+		if gSingleMode {
+			if err := app.nav.sync(); err != nil {
+				app.ui.echoerrf("clear: %s", err)
+				return
+			}
+		} else {
+			if err := remote("send sync"); err != nil {
+				app.ui.echoerrf("clear: %s", err)
+				return
+			}
 		}
 		app.ui.loadFileInfo(app.nav)
 	case "draw":
@@ -1126,9 +1185,14 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 	case "rename":
 		if cmd, ok := gOpts.cmds["rename"]; ok {
 			cmd.eval(app, e.args)
-			if err := remote("send load"); err != nil {
-				app.ui.echoerrf("rename: %s", err)
-				return
+			if gSingleMode {
+				app.nav.renew()
+				app.ui.loadFile(app.nav, true)
+			} else {
+				if err := remote("send load"); err != nil {
+					app.ui.echoerrf("rename: %s", err)
+					return
+				}
 			}
 		} else {
 			curr, err := app.nav.currFile()
@@ -1538,9 +1602,14 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 					return
 				}
 
-				if err := remote("send load"); err != nil {
-					app.ui.echoerrf("rename: %s", err)
-					return
+				if gSingleMode {
+					app.nav.renew()
+					app.ui.loadFile(app.nav, true)
+				} else {
+					if err := remote("send load"); err != nil {
+						app.ui.echoerrf("rename: %s", err)
+						return
+					}
 				}
 
 				app.ui.loadFile(app.nav, true)
