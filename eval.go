@@ -818,7 +818,9 @@ func (e *callExpr) evalBuiltin(app *app, args []string) {
 		app.nav.loadDir(app.nav.currDir().path)
 	case "preload":
 		for _, path := range e.args {
-			app.nav.loadDir(path)
+			for curr, base := path, ""; !isRoot(base); curr, base = filepath.Dir(curr), filepath.Base(curr) {
+				app.nav.loadDir(curr)
+			}
 		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
