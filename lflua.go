@@ -77,6 +77,7 @@ lf.shell_async = function (...) lf.eval_exec("&", ...) end
 lf.push = function (...) lf.eval_call("push", ...) end
 lf.cmd = function (name, cmd) lf.eval("cmd " .. name .. " " .. cmd) end
 lf.map = function (key, val) lf.eval("map " .. key .. " " .. val) end
+lf.cmap = function (key, val) lf.eval("cmap " .. key .. " " .. val) end
 
 lf.command_hooks = {}
 
@@ -117,7 +118,6 @@ func LuaInit(app *app) *lua.State {
 		tokens := strings.Split(s, sep)
 		for _, tok := range tokens {
 			l.PushString(tok)
-			log.Print(tok)
 		}
 		return len(tokens)
 	})
@@ -154,6 +154,24 @@ func LuaHook(app *app, cmd string, args []string) {
 		l.PushString(s)
 	}
 	l.Call(len(args)+1, 0)
+}
+
+func LuaComplete(app *app, tokens []string) (matches []string, longest string) {
+	l := app.luaState
+	l.Global("complete")
+	for _, t := range tokens {
+		l.PushString(t)
+	}
+	l.Call(len(tokens), lua.MultipleReturns)
+	if s, ok := l.ToString(-1); ok {
+		longest = s
+		l.Pop(1)
+	}
+	for s, ok := l.ToString(-1); ok; s, ok = l.ToString(-1) {
+		matches = append(matches, s)
+		l.Pop(1)
+	}
+	return
 }
 
 // var gOpts struct {

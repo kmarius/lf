@@ -295,7 +295,7 @@ func matchFile(s string) (matches []string, longest string) {
 	return
 }
 
-func completeCmd(acc []rune) (matches []string, longestAcc []rune) {
+func completeCmd(app *app, acc []rune) (matches []string, longestAcc []rune) {
 	s := string(acc)
 	f := tokenize(s)
 
@@ -327,7 +327,9 @@ func completeCmd(acc []rune) (matches []string, longestAcc []rune) {
 		case "map", "cmd":
 			longestAcc = acc
 		default:
-			matches, longest = matchFile(f[len(f)-1])
+			matches, _ = LuaComplete(app, f)
+			matches, longest = matchWord(f[len(f)-1], matches)
+			// matches, longest = matchFile(f[len(f)-1])
 			longestAcc = append(acc[:len(acc)-len(f[len(f)-1])], []rune(longest)...)
 		}
 	default:
@@ -335,11 +337,12 @@ func completeCmd(acc []rune) (matches []string, longestAcc []rune) {
 		case "set", "map", "cmd":
 			longestAcc = acc
 		default:
-			matches, longest = matchFile(f[len(f)-1])
+			matches, _ = LuaComplete(app, f)
+			matches, longest = matchWord(f[len(f)-1], matches)
+			// matches, longest = matchFile(f[len(f)-1])
 			longestAcc = append(acc[:len(acc)-len(f[len(f)-1])], []rune(longest)...)
 		}
 	}
-
 	return
 }
 

@@ -1141,7 +1141,7 @@ func (e *callExpr) eval(app *app, args []string) {
 		var matches []string
 		switch app.ui.cmdPrefix {
 		case ":":
-			matches, app.ui.cmdAccLeft = completeCmd(app.ui.cmdAccLeft)
+			matches, app.ui.cmdAccLeft = completeCmd(app, app.ui.cmdAccLeft)
 		case "/", "?":
 			matches, app.ui.cmdAccLeft = completeFile(app.ui.cmdAccLeft)
 		case "$", "%", "!", "&":
@@ -1181,8 +1181,9 @@ func (e *callExpr) eval(app *app, args []string) {
 		var matches []string
 		switch app.ui.cmdPrefix {
 		case ":":
-			matches, app.ui.cmdAccLeft = completeCmd(target)
+			matches, app.ui.cmdAccLeft = completeCmd(app, target)
 		case "/", "?":
+			log.Print("fugg")
 			matches, app.ui.cmdAccLeft = completeFile(target)
 		case "$", "%", "!", "&":
 			matches, app.ui.cmdAccLeft = completeShell(target)
@@ -1222,7 +1223,7 @@ func (e *callExpr) eval(app *app, args []string) {
 		var matches []string
 		switch app.ui.cmdPrefix {
 		case ":":
-			matches, app.ui.cmdAccLeft = completeCmd(target)
+			matches, app.ui.cmdAccLeft = completeCmd(app, target)
 		case "/", "?":
 			matches, app.ui.cmdAccLeft = completeFile(target)
 		case "$", "%", "!", "&":
