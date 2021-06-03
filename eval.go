@@ -675,7 +675,9 @@ func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
 	case "preload":
 		for _, path := range e.args {
-			app.nav.loadDir(path)
+			for curr, base := path, ""; !isRoot(base); curr, base = filepath.Dir(curr), filepath.Base(curr) {
+				app.nav.loadDir(curr)
+			}
 		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
