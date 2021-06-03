@@ -4,13 +4,13 @@ import (
 	"log"
 	"strings"
 
-	"github.com/Shopify/go-lua"
+	lua "github.com/yuin/gopher-lua"
 )
 
-func lfLibrary(app *app) []lua.RegistryFunction {
-	return []lua.RegistryFunction{
-		{"eval", func(l *lua.State) int {
-			s, _ := l.ToString(1)
+func lfLibrary(app *app) map[string]lua.LGFunction {
+	return map[string]lua.LGFunction{
+		"eval": func(l *lua.LState) int {
+			s := l.ToString(1)
 			p := newParser(strings.NewReader(s))
 			for p.parse() {
 				p.expr.eval(app, nil)
@@ -19,19 +19,19 @@ func lfLibrary(app *app) []lua.RegistryFunction {
 				app.ui.echoerrf("%s", p.err)
 			}
 			return 0
-		}},
-		{"eval_exec", func(l *lua.State) int {
-			prefix, _ := l.ToString(1)
-			value, _ := l.ToString(2)
+		},
+		"eval_exec": func(l *lua.LState) int {
+			prefix := l.ToString(1)
+			value := l.ToString(2)
 			e := &execExpr{prefix: prefix, value: value}
 			e.eval(app, nil)
 			return 0
-		}},
-		{"eval_call", func(l *lua.State) int {
+		},
+		"eval_call": func(l *lua.LState) int {
 			args := []string{}
-			cmd, _ := l.ToString(1)
-			for i := 2; i <= l.Top(); i++ {
-				arg, _ := l.ToString(i)
+			cmd := l.ToString(1)
+			for i := 2; i <= l.GetTop(); i++ {
+				arg := l.ToString(i)
 				args = append(args, arg)
 			}
 			if cmd != "" {
@@ -39,32 +39,33 @@ func lfLibrary(app *app) []lua.RegistryFunction {
 				e.eval(app, nil)
 			}
 			return 0
-		}},
+		},
 
-		{"set", func(l *lua.State) int {
-			opt, _ := l.ToString(1)
-			val, _ := l.ToString(2)
+		"set": func(l *lua.LState) int {
+			opt := l.ToString(1)
+			val := l.ToString(2)
 			e := &setExpr{opt: opt, val: val}
 			e.eval(app, nil)
 			return 0
-		}},
-		{"unmap", func(l *lua.State) int {
-			key, _ := l.ToString(1)
+		},
+		"unmap": func(l *lua.LState) int {
+			key := l.ToString(1)
 			if _, ok := gOpts.keys[key]; ok {
 				delete(gOpts.keys, key)
 			}
 			return 0
-		}},
-		{"log", func(l *lua.State) int {
-			s, _ := l.ToString(1)
+		},
+		"log": func(l *lua.LState) int {
+			s := l.ToString(1)
 			log.Print(s)
 			return 0
-		}},
-		{"get", lfOptGet},
+		},
+		"get": lfOptGet,
 	}
 }
 
 var lfHelpers = `
+lf = require("lf")
 lf.echo = function (...) lf.eval_call("echo", ...) end
 lf.echomsg = function (...) lf.eval_call("echomsg", ...) end
 lf.echoerr = function (...) lf.eval_call("echoerr", ...) end
@@ -99,78 +100,78 @@ function run_command_hook (cmd, ...)
 end
 `
 
-func LuaInit(app *app) *lua.State {
+func LuaInit(app *app) *lua.LState {
 	l := lua.NewState()
-	lua.OpenLibraries(l)
-	lua.Require(l, "lf", func(l *lua.State) int {
-		lua.NewLibrary(l, lfLibrary(app))
+	l.PreloadModule("lf", func(l *lua.LState) int {
+		mod := l.SetFuncs(l.NewTable(), lfLibrary(app))
+		l.Push(mod)
 		return 1
-	}, true)
-	l.Pop(1)
+	})
 
-	if err := lua.DoString(l, lfHelpers); err != nil {
+	if err := l.DoString(lfHelpers); err != nil {
 		app.ui.echoerr(err.Error())
 	}
-
-	l.Register("stringsplit", func(l *lua.State) int {
-		s, _ := l.ToString(1)
-		sep, _ := l.ToString(2)
-		tokens := strings.Split(s, sep)
-		for _, tok := range tokens {
-			l.PushString(tok)
-		}
-		return len(tokens)
-	})
 
 	return l
 }
 
 func LuaSource(app *app, file string) {
+	l := app.luaState
 	log.Printf("luasource: %s\n", file)
-	if err := lua.DoFile(app.luaState, file); err != nil {
+	if err := l.DoFile(file); err != nil {
 		app.ui.echoerr(err.Error())
 	}
 }
 
 func LuaRun(app *app, str string, args []string) {
 	l := app.luaState
-	l.CreateTable(len(args), 0)
+	argv := l.NewTable()
 	for i, arg := range args {
-		l.PushInteger(i + 1)
-		l.PushString(arg)
-		l.SetTable(-3)
+		l.RawSetInt(argv, i+1, lua.LString(arg))
 	}
-	l.SetGlobal("argv")
-	if err := lua.DoString(app.luaState, str); err != nil {
+	l.SetGlobal("argv", argv)
+	if err := l.DoString(str); err != nil {
 		app.ui.echoerr(err.Error())
 	}
 }
 
 func LuaHook(app *app, cmd string, args []string) {
 	l := app.luaState
-	l.Global("run_command_hook")
-	l.PushString(cmd)
+	lArgs := []lua.LValue{lua.LString(cmd)}
 	for _, s := range args {
-		l.PushString(s)
+		lArgs = append(lArgs, lua.LString(s))
 	}
-	l.Call(len(args)+1, 0)
+	l.CallByParam(lua.P{
+		Fn:      l.GetGlobal("run_command_hook"),
+		NRet:    0,
+		Protect: true,
+	}, lArgs...)
 }
 
 func LuaComplete(app *app, tokens []string) (matches []string, longest string) {
 	l := app.luaState
-	l.Global("complete")
-	for _, t := range tokens {
-		l.PushString(t)
+	lArgs := []lua.LValue{}
+	for _, s := range tokens {
+		lArgs = append(lArgs, lua.LString(s))
 	}
-	l.Call(len(tokens), lua.MultipleReturns)
-	if s, ok := l.ToString(-1); ok {
-		longest = s
+	l.CallByParam(lua.P{
+		Fn:      l.GetGlobal("complete"),
+		NRet:    lua.MultRet,
+		Protect: true,
+	}, lArgs...)
+
+	if str, ok := l.Get(-1).(lua.LString); ok {
+		longest = str.String()
+	}
+	l.Pop(1)
+	t := l.GetTop()
+	for i := 0; i < t; i = i + 1 {
+		if str, ok := l.Get(-1).(lua.LString); ok {
+			matches = append(matches, str.String())
+		}
 		l.Pop(1)
 	}
-	for s, ok := l.ToString(-1); ok; s, ok = l.ToString(-1) {
-		matches = append(matches, s)
-		l.Pop(1)
-	}
+
 	return
 }
 
@@ -181,120 +182,120 @@ func LuaComplete(app *app, tokens []string) (matches []string, longest string) {
 // 	sortType       sortType
 // }
 
-func lfOptGet(l *lua.State) int {
-	opt, _ := l.ToString(1)
+func lfOptGet(l *lua.LState) int {
+	opt := l.ToString(1)
 	switch opt {
 	case "anchorfind":
-		l.PushBoolean(gOpts.anchorfind)
+		l.Push(lua.LBool(gOpts.anchorfind))
 		return 1
 	case "dircounts":
-		l.PushBoolean(gOpts.dircounts)
+		l.Push(lua.LBool(gOpts.dircounts))
 		return 1
 	case "drawbox":
-		l.PushBoolean(gOpts.drawbox)
+		l.Push(lua.LBool(gOpts.drawbox))
 		return 1
 	case "globsearch":
-		l.PushBoolean(gOpts.globsearch)
+		l.Push(lua.LBool(gOpts.globsearch))
 		return 1
 	case "icons":
-		l.PushBoolean(gOpts.icons)
+		l.Push(lua.LBool(gOpts.icons))
 		return 1
 	case "ignorecase":
-		l.PushBoolean(gOpts.ignorecase)
+		l.Push(lua.LBool(gOpts.ignorecase))
 		return 1
 	case "ignoredia":
-		l.PushBoolean(gOpts.ignoredia)
+		l.Push(lua.LBool(gOpts.ignoredia))
 		return 1
 	case "incsearch":
-		l.PushBoolean(gOpts.incsearch)
+		l.Push(lua.LBool(gOpts.incsearch))
 		return 1
 	case "mouse":
-		l.PushBoolean(gOpts.mouse)
+		l.Push(lua.LBool(gOpts.mouse))
 		return 1
 	case "number":
-		l.PushBoolean(gOpts.number)
+		l.Push(lua.LBool(gOpts.number))
 		return 1
 	case "preview":
-		l.PushBoolean(gOpts.preview)
+		l.Push(lua.LBool(gOpts.preview))
 		return 1
 	case "relativenumber":
-		l.PushBoolean(gOpts.relativenumber)
+		l.Push(lua.LBool(gOpts.relativenumber))
 		return 1
 	case "smartcase":
-		l.PushBoolean(gOpts.smartcase)
+		l.Push(lua.LBool(gOpts.smartcase))
 		return 1
 	case "smartdia":
-		l.PushBoolean(gOpts.smartdia)
+		l.Push(lua.LBool(gOpts.smartdia))
 		return 1
 	case "waitmsg":
-		l.PushString(gOpts.waitmsg)
+		l.Push(lua.LString(gOpts.waitmsg))
 		return 1
 	case "wrapscan":
-		l.PushBoolean(gOpts.wrapscan)
+		l.Push(lua.LBool(gOpts.wrapscan))
 		return 1
 	case "wrapscroll":
-		l.PushBoolean(gOpts.wrapscroll)
+		l.Push(lua.LBool(gOpts.wrapscroll))
 		return 1
 	case "findlen":
-		l.PushInteger(gOpts.findlen)
+		l.Push(lua.LNumber(gOpts.findlen))
 		return 1
 	case "period":
-		l.PushInteger(gOpts.period)
+		l.Push(lua.LNumber(gOpts.period))
 		return 1
 	case "scrolloff":
-		l.PushInteger(gOpts.scrolloff)
+		l.Push(lua.LNumber(gOpts.scrolloff))
 		return 1
 	case "tabstop":
-		l.PushInteger(gOpts.tabstop)
+		l.Push(lua.LNumber(gOpts.tabstop))
 		return 1
 	case "errorfmt":
-		l.PushString(gOpts.errorfmt)
+		l.Push(lua.LString(gOpts.errorfmt))
 		return 1
 	case "filesep":
-		l.PushString(gOpts.filesep)
+		l.Push(lua.LString(gOpts.filesep))
 		return 1
 	case "ifs":
-		l.PushString(gOpts.ifs)
+		l.Push(lua.LString(gOpts.ifs))
 		return 1
 	case "previewer":
-		l.PushString(gOpts.previewer)
+		l.Push(lua.LString(gOpts.previewer))
 		return 1
 	case "cleaner":
-		l.PushString(gOpts.cleaner)
+		l.Push(lua.LString(gOpts.cleaner))
 		return 1
 	case "promptfmt":
-		l.PushString(gOpts.promptfmt)
+		l.Push(lua.LString(gOpts.promptfmt))
 		return 1
 	case "shell":
-		l.PushString(gOpts.shell)
+		l.Push(lua.LString(gOpts.shell))
 		return 1
 	case "shellflag":
-		l.PushString(gOpts.shellflag)
+		l.Push(lua.LString(gOpts.shellflag))
 		return 1
 	case "timefmt":
-		l.PushString(gOpts.timefmt)
+		l.Push(lua.LString(gOpts.timefmt))
 		return 1
 	case "truncatechar":
-		l.PushString(gOpts.truncatechar)
+		l.Push(lua.LString(gOpts.truncatechar))
 		return 1
 	case "ratios":
 		for _, el := range gOpts.ratios {
-			l.PushInteger(el)
+			l.Push(lua.LNumber(el))
 		}
 		return len(gOpts.ratios)
 	case "hiddenfiles":
 		for _, el := range gOpts.hiddenfiles {
-			l.PushString(el)
+			l.Push(lua.LString(el))
 		}
 		return len(gOpts.hiddenfiles)
 	case "info":
 		for _, el := range gOpts.info {
-			l.PushString(el)
+			l.Push(lua.LString(el))
 		}
 		return len(gOpts.info)
 	case "shellopts":
 		for _, el := range gOpts.shellopts {
-			l.PushString(el)
+			l.Push(lua.LString(el))
 		}
 		return len(gOpts.shellopts)
 	default:

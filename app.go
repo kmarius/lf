@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Shopify/go-lua"
+	lua "github.com/yuin/gopher-lua"
 )
 
 type cmdItem struct {
@@ -22,7 +22,7 @@ type cmdItem struct {
 }
 
 type app struct {
-	luaState      *lua.State
+	luaState      *lua.LState
 	ui            *ui
 	nav           *nav
 	ticker        *time.Ticker
