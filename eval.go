@@ -673,6 +673,10 @@ func insert(app *app, arg string) {
 
 func (e *callExpr) eval(app *app, args []string) {
 	switch e.name {
+	case "preload":
+		for _, path := range e.args {
+			app.nav.loadDir(path)
+		}
 	case "up":
 		if app.ui.cmdPrefix != "" && app.ui.cmdPrefix != ">" {
 			normal(app)
