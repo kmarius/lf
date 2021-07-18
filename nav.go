@@ -112,6 +112,7 @@ type dir struct {
 	path         string    // full path of directory
 	files        []*file   // displayed files in directory including or excluding hidden ones
 	allFiles     []*file   // all files in directory including hidden ones (same array as files)
+	sortedFiles  []*file   // copy of all files sorted/dirfirst/reversed
 	sortType     sortType  // sort method and options from last sort
 	hiddenfiles  []string  // hiddenfiles value from last sort
 	ignorecase   bool      // ignorecase value from last sort
@@ -129,11 +130,12 @@ func newDir(path string) *dir {
 	}
 
 	return &dir{
-		loadTime: time,
-		path:     path,
-		files:    files,
-		allFiles: files,
-		noPerm:   os.IsPermission(err),
+		loadTime:    time,
+		path:        path,
+		files:       files,
+		allFiles:    files,
+		sortedFiles: files,
+		noPerm:      os.IsPermission(err),
 	}
 }
 
@@ -156,21 +158,6 @@ func (dir *dir) sort() {
 	dir.ignoredia = gOpts.ignoredia
 
 	dir.files = dir.allFiles
-
-	if dir.filterString != "" {
-		sort.SliceStable(dir.files, func(i, j int) bool {
-			if a := !matchesFilter(dir.files[i].Name(), dir.filterString); !a || matchesFilter(dir.files[j].Name(), dir.filterString) {
-				return a
-			}
-			return i < j
-		})
-		for i := len(dir.files); i > 0; i-- {
-			if !matchesFilter(dir.files[i-1].Name(), dir.filterString) {
-				dir.files = dir.files[i:]
-				break
-			}
-		}
-	}
 
 	switch dir.sortType.method {
 	case naturalSort:
@@ -235,29 +222,55 @@ func (dir *dir) sort() {
 		})
 	}
 
-	// when hidden option is disabled, we move hidden files to the
-	// beginning of our file list and then set the beginning of displayed
-	// files to the first non-hidden file in the list
 	if dir.sortType.option&hiddenSort == 0 {
 		sort.SliceStable(dir.files, func(i, j int) bool {
-			if isHidden(dir.files[i], dir.path, dir.hiddenfiles) && isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
-				return i < j
+			if a := isHidden(dir.files[i], dir.path, dir.hiddenfiles); !a || !isHidden(dir.files[j], dir.path, dir.hiddenfiles) {
+				return a
 			}
-			return isHidden(dir.files[i], dir.path, dir.hiddenfiles)
+			return i < j
 		})
-		for i, f := range dir.files {
-			if !isHidden(f, dir.path, dir.hiddenfiles) {
+		for i := len(dir.files); i > 0; i-- {
+			if isHidden(dir.files[i-1], dir.path, dir.hiddenfiles) {
 				dir.files = dir.files[i:]
-				return
+				break
 			}
 		}
-		dir.files = dir.files[len(dir.files):]
+	}
+	dir.sortedFiles = dir.files
+	dir.applyFilter()
+}
+
+func (dir *dir) applyFilter() {
+	if dir.filterString != "" {
+		matches := make([]*file, len(dir.sortedFiles))
+		j := 0
+		for _, f := range dir.sortedFiles {
+			if matchesFilter(f.Name(), dir.filterString) {
+				matches[j] = f
+				j++
+			}
+		}
+		dir.files = matches[:j]
+	} else {
+		dir.files = dir.sortedFiles
 	}
 }
 
 func matchesFilter(s string, t string) bool {
-	u, v := normalize(s, t, gOpts.ignorecase, gOpts.ignoredia)
-	return strings.Contains(u, v)
+	for _, tok := range strings.Split(t, " ") {
+		negate := strings.HasPrefix(tok, "!")
+		tok = strings.TrimPrefix(tok, "!")
+		if tok == "" {
+			continue
+		}
+		u, v := normalize(s, tok, gOpts.ignorecase, gOpts.ignoredia)
+		if strings.Contains(u, v) == negate {
+			return false
+		}
+	}
+	return true
+	// u, v := normalize(s, t, gOpts.ignorecase, gOpts.ignoredia)
+	// return strings.Contains(u, v)
 }
 
 func (nav *nav) filterCurrDir(filterString string) {
@@ -268,21 +281,21 @@ func (nav *nav) filterCurrDir(filterString string) {
 }
 
 func (dir *dir) filter(filterString string) {
-	if strings.HasPrefix(filterString, dir.filterString) && filterString != "" {
-		matchingFiles := make([]*file, len(dir.files))
-		j := 0
-		for _, f := range dir.files {
-			if matchesFilter(f.Name(), filterString) {
-				matchingFiles[j] = f
-				j++
-			}
-		}
-		dir.files = matchingFiles[:j]
-		dir.filterString = filterString
-	} else {
-		dir.filterString = filterString
-		dir.sort()
-	}
+	// if strings.HasPrefix(filterString, dir.filterString) && filterString != "" {
+	// 	matchingFiles := make([]*file, len(dir.files))
+	// 	j := 0
+	// 	for _, f := range dir.files {
+	// 		if matchesFilter(f.Name(), filterString) {
+	// 			matchingFiles[j] = f
+	// 			j++
+	// 		}
+	// 	}
+	// 	dir.files = matchingFiles[:j]
+	// 	dir.filterString = filterString
+	// } else {
+	dir.filterString = filterString
+	dir.applyFilter()
+	// }
 }
 
 func (dir *dir) name() string {
